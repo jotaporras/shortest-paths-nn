@@ -10,6 +10,7 @@ from torch_geometric.utils import to_networkx
 from torch_geometric.data import Data
 
 import os
+from pathlib import Path
 
 from .baselines import *
 
@@ -19,6 +20,9 @@ from tqdm import tqdm, trange
 
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+OUTPUT_DIR = Path(os.environ.get('TERRAIN_OUTPUT_DIR', REPO_ROOT))
 
 def npz_to_dataset(data):
     
@@ -61,12 +65,32 @@ def load_top_lvl_directory_from_config(dataset_name, config):
     p = config['p']
     
     vn_ = 'vn' if vn else 'no-vn'
-    mlp_ = f'mlp/{aggr}' if mlp else 'siamese'
     if mlp:
-        directory = f'/data/sam/terrain/models/single_dataset/{dataset_name}/{layer_type}/{vn_}/mlp/p-{p}/{aggr}/{loss_func}'
+        directory = (
+            OUTPUT_DIR
+            / 'models'
+            / 'single_dataset'
+            / dataset_name
+            / layer_type
+            / vn_
+            / 'mlp'
+            / f'p-{p}'
+            / aggr
+            / loss_func
+        )
     else:
-        directory = f'/data/sam/terrain/models/single_dataset/{dataset_name}/{layer_type}/{vn_}/siamese/p-{p}/{loss_func}'
-    return directory
+        directory = (
+            OUTPUT_DIR
+            / 'models'
+            / 'single_dataset'
+            / dataset_name
+            / layer_type
+            / vn_
+            / 'siamese'
+            / f'p-{p}'
+            / loss_func
+        )
+    return str(directory)
 
 def load_models(model_dictionary, file, trials = ['1', '2', '3', '4', '5'], finetune=False):
     best_models = {}

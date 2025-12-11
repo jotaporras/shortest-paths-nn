@@ -35,7 +35,7 @@ echo "loss = $loss"
 
 python train-cross-terrain.py --train-data $train_data \
 --test-data $test_data \
---epochs $epochs\
+--epochs $epochs \
  --device $device \
 --batch-size $batch_size \
 --dataset-name $dataset_name \

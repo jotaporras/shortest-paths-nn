@@ -16,11 +16,13 @@ from torch_geometric.nn import to_hetero
 from src.transforms import add_laplace_positional_encoding, add_virtual_node
 import yaml
 import os
+from pathlib import Path
 import csv
 
 from refactor_training import *
 
-output_dir = '/data/sam/terrain/'
+REPO_ROOT = Path(__file__).resolve().parent
+output_dir = Path(os.environ.get('TERRAIN_OUTPUT_DIR', REPO_ROOT))
 
 
 def main():
@@ -57,7 +59,14 @@ def main():
         model_configs = yaml.safe_load(file)
 
     for modelname in model_configs: 
-        train_file = os.path.join(output_dir, 'data', f'{args.train_data}.pt')
+        train_name = Path(args.train_data)
+        if train_name.is_absolute():
+            train_file = train_name
+        elif train_name.suffix:
+            train_file = output_dir / 'data' / train_name
+        else:
+            train_file = output_dir / 'data' / f'{args.train_data}.pt'
+        train_file = str(train_file)
         print("Training file", train_file)
         test_file = os.path.join(output_dir, 'data', args.test_data)
         
@@ -96,5 +105,4 @@ def main():
     
 if __name__=='__main__':
     main()
-
 

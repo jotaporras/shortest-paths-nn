@@ -12,6 +12,10 @@ In order to run the experiments for the *single terrain* case, we use the follow
 
 `./run-experiment-1-terrain.sh <experiment-config-here> <trial>`
 
+Example first-stage (single-terrain encoder/MLP pretrain with the new MLP flag):
+
+`./run-experiment-1-terrain.sh experiment-configs/new-MLP-test/GNN+MLP-real.yml debug --new`
+
 
 ### Cross terrain model
 We recently extended our code to be able to handle training over multiple terrains. For our cross terrain case, we train each terrain sequentially per epoch. Training over multiple terrain graphs can be done using the following bash script: 
@@ -71,4 +75,10 @@ Table 3. Comparing relative and absolute error with the new MLP and GAT implemen
 | Coarse GAT+$L_1$|    |  |      |      |
 | MCTR GAT        |    |  |      |      |
 
-### Terrain uncertainty modeling
+----
+
+
+## Update 2025-12-10
+Example de-coupled run (stage 2 finetuning):
+
+`./run-experiment-de-coupled.sh experiment-configs/new-MLP-test/finetuning.yml debug --single-terrain-per-model --new`

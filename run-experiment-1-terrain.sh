@@ -38,8 +38,8 @@ echo "loss = $loss"
 
 python train_single_terrain_case.py --train-data $train_data \
 --test-data $test_data \
---epochs $epochs\
- --device $device \
+--epochs $epochs \
+--device $device \
 --batch-size $batch_size \
 --dataset-name $dataset_name \
 --config $config \

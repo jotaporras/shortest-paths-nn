@@ -16,11 +16,13 @@ from torch_geometric.nn import to_hetero
 from src.transforms import add_laplace_positional_encoding, add_virtual_node
 import yaml
 import os
+from pathlib import Path
 import csv
 
 from refactor_training import *
 
-output_dir = '/data/sam/terrain/'
+REPO_ROOT = Path(__file__).resolve().parent
+output_dir = Path(os.environ.get('TERRAIN_OUTPUT_DIR', REPO_ROOT))
 
 def prepare_single_terrain_dataset(train_data, batch_size):
 
@@ -40,8 +42,22 @@ def get_artificial_datasets(layer_type, trial, res=1, new=True):
     finetuning_files = []
     amps = [1.0, 2.0, 4.0, 6.0, 8.0,9.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0]
     for a in amps:
-        pth = f'/data/sam/terrain/data/artificial/change-heights/amp-{a}-res-{res}-train-50k.npz'
-        name =  f'/data/sam/terrain/models/single_dataset/artificial/change-heights/amp-{a}-res-{res}-train-50k/{layer_type}/no-vn/siamese/p-1/mse_loss/<modelname>/{trial}'
+        pth = str(output_dir / 'data' / 'artificial' / 'change-heights' / f'amp-{a}-res-{res}-train-50k.npz')
+        name = str(
+            output_dir
+            / 'models'
+            / 'single_dataset'
+            / 'artificial'
+            / 'change-heights'
+            / f'amp-{a}-res-{res}-train-50k'
+            / layer_type
+            / 'no-vn'
+            / 'siamese'
+            / 'p-1'
+            / 'mse_loss'
+            / '<modelname>'
+            / trial
+        )
         if new and layer_type =='MLP':
             name = os.path.join(name, 'new')
         dataset_name = f'amp-{a}-res-{res}-train-50k'
@@ -96,7 +112,15 @@ def main():
         num_datasets = len(dataset_names)
     else:
         dataset_names = [args.dataset_name]
-        train_data_pths = [os.path.join(output_dir, 'data', f'{args.train_data}.npz')]
+        train_name = Path(args.train_data)
+        if train_name.is_absolute():
+            train_pth = train_name
+        elif train_name.suffix:
+            train_pth = output_dir / 'data' / train_name
+        else:
+            default_ext = '.npz' if args.single_terrain_per_model else '.pt'
+            train_pth = output_dir / 'data' / f'{args.train_data}{default_ext}'
+        train_data_pths = [str(train_pth)]
         finetuning_from = args.finetune_from
         num_datasets = 1
 
@@ -137,5 +161,4 @@ def main():
     
 if __name__=='__main__':
     main()
-
 

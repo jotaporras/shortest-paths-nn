@@ -16,18 +16,21 @@ from torch_geometric.nn import to_hetero
 from src.transforms import add_laplace_positional_encoding, add_virtual_node
 import yaml
 import os
+from pathlib import Path
 import csv
 
 from refactor_training import *
 
-output_dir = '/data/sam/terrain/'
+REPO_ROOT = Path(__file__).resolve().parent
+output_dir = Path(os.environ.get('TERRAIN_OUTPUT_DIR', REPO_ROOT))
 
 def get_artificial_datasets(res=2):
     dataset_names = []
     train_data_pths = []
     amps = [1.0, 2.0, 4.0, 6.0, 8.0,9.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0]
     for a in amps:
-        pth = f'/data/sam/terrain/data/artificial/change-heights/amp-{a}-res-{res}-train-50k.npz'
+        # TODO this is hardcoded fix it
+        pth = str(output_dir / 'data' / 'artificial' / 'change-heights' / f'amp-{a}-res-{res}-train-50k.npz')
         name =  f'artificial/change-heights/amp-{a}-res-{res}-train-50k'
         dataset_names.append(name)
         train_data_pths.append(pth)
@@ -72,7 +75,14 @@ def main():
         num_datasets = len(dataset_names)
     else:
         dataset_names = [args.dataset_name]
-        train_data_pths = [os.path.join(output_dir, 'data', f'{args.train_data}.npz')]
+        train_name = Path(args.train_data)
+        if train_name.is_absolute():
+            train_pth = train_name
+        elif train_name.suffix:
+            train_pth = output_dir / 'data' / train_name
+        else:
+            train_pth = output_dir / 'data' / f'{args.train_data}.npz'
+        train_data_pths = [str(train_pth)]
         num_datasets = 1
     
     for i in range(num_datasets):
@@ -133,5 +143,4 @@ def main():
         
 if __name__=='__main__':
     main()
-
 

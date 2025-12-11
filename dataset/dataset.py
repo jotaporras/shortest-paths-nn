@@ -28,7 +28,7 @@ def load_dem_data_(filename, imperial=False):
     print("Elevation given in imperial units:", imperial)
     c = 1
     if imperial:
-        c = 3.28084
+        c = 3.28084 # feet/meter factor.
     for i in range(1, len(lines)):
         vals = lines[i].split()
         a = []

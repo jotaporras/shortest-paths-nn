@@ -1,0 +1,21 @@
+# Core deep learning stack
+torch
+torch-geometric
+
+# Scientific computing
+numpy
+scipy
+scikit-learn
+
+# Graph and model utilities
+networkx
+torchmetrics
+tqdm
+
+# Visualization and experiment tracking
+matplotlib
+wandb
+tensorboard
+
+# Configuration
+pyyaml

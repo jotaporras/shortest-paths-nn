@@ -18,6 +18,7 @@ from torch_geometric.nn import to_hetero
 from src.transforms import add_laplace_positional_encoding, add_virtual_node
 import yaml
 import os
+from pathlib import Path
 import csv
 import logging
 import copy
@@ -32,7 +33,8 @@ wandb.login()
 
 MSE = nn.MSELoss()
 
-output_dir = '/data/sam/terrain/'
+REPO_ROOT = Path(__file__).resolve().parent
+output_dir = Path(os.environ.get('TERRAIN_OUTPUT_DIR', REPO_ROOT))
 
 sparse_tensor = ToSparseTensor()
 virtual_node_transform = VirtualNode()
@@ -223,7 +225,7 @@ def train_terrains_decoupled(train_dictionary,
 
     run = wandb.init(
         project='terrains',
-        dir='/data/sam/wandb',
+        dir=str(output_dir / 'wandb'),
         config={
             "learning_rate": lr,
             "epochs": epochs,
@@ -281,7 +283,7 @@ def train_few_cross_terrain_case(train_dictionary,
                                 epochs=100, 
                                 loss_func='mse_loss',
                                 lr =0.001,
-                                log_dir='/data/sam',
+                                log_dir=str(output_dir),
                                 siamese=True,
                                 p=1, 
                                 aggr='sum',
@@ -323,7 +325,7 @@ def train_few_cross_terrain_case(train_dictionary,
 
     run = wandb.init(
         project='terrains',
-        dir='/data/sam/wandb',
+        dir=str(output_dir / 'wandb'),
         config={
             "learning_rate": lr,
             "epochs": epochs,
