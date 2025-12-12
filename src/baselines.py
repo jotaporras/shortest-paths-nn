@@ -20,6 +20,34 @@ from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops, softmax
 from torch_geometric.nn.inits import glorot, zeros
 
+# Layers that support the edge_dim parameter
+LAYERS_WITH_EDGE_DIM = {'GATConv', 'GATv2Conv', 'TransformerConv', 'GeneralConv', 
+                        'GeneralConvMaxAttention', 'GeneralConvMinAttention', 
+                        'GeneralConvMultiAttention'}
+
+def create_graph_layer(layer_type, in_channels, out_channels, edge_dim=None):
+    """
+    Factory function to create graph convolutional layers with appropriate parameters.
+    
+    Some layers (GCNConv, TAGConv, GINConv) don't support edge_dim, while others
+    (GATConv, GATv2Conv, TransformerConv, GeneralConv) do.
+    
+    Args:
+        layer_type: String name of the layer class (e.g., 'GATConv', 'GCNConv')
+        in_channels: Number of input features
+        out_channels: Number of output features
+        edge_dim: Edge feature dimension (only passed to layers that support it)
+    
+    Returns:
+        Instantiated graph layer
+    """
+    layer_class = globals()[layer_type]
+    
+    if layer_type in LAYERS_WITH_EDGE_DIM and edge_dim is not None:
+        return layer_class(in_channels, out_channels, edge_dim=edge_dim)
+    else:
+        return layer_class(in_channels, out_channels)
+
 def get_coords(batch):
     graph = batch[3]
     source_coord = graph.pos[batch[0]]
@@ -269,12 +297,14 @@ class GNNModel(nn.Module):
                  edge_dim=None, layer_norm=False, **kwargs):
         super(GNNModel, self).__init__()
 
-        # Initialize the first layer
-        graph_layer = globals()[layer_type]
-        self.initial = graph_layer(input, hidden, edge_dim=edge_dim)
+        # Initialize the first layer using factory function
+        self.initial = create_graph_layer(layer_type, input, hidden, edge_dim=edge_dim)
         
         # Initialize the subsequent layers
-        self.module_list = nn.ModuleList([graph_layer(hidden, hidden, edge_dim=edge_dim) for _ in range(layers - 1)])
+        self.module_list = nn.ModuleList([
+            create_graph_layer(layer_type, hidden, hidden, edge_dim=edge_dim) 
+            for _ in range(layers - 1)
+        ])
         
         # Output layer
         self.output = nn.Linear(hidden, output)
@@ -292,10 +322,14 @@ class GNNModel(nn.Module):
         # x = data.x
         # edge_index = data.edge_index
 
-        x = self.initial(x, edge_index, edge_attr=edge_attr)
+        # Only pass edge_attr to layers that support it
+        use_edge_attr = self.layer_type in LAYERS_WITH_EDGE_DIM
+        layer_edge_attr = edge_attr if use_edge_attr else None
+
+        x = self.initial(x, edge_index) if not use_edge_attr else self.initial(x, edge_index, edge_attr=layer_edge_attr)
         x = self.activation(x)
         for layer in self.module_list:
-            x = layer(x, edge_index, edge_attr=edge_attr)
+            x = layer(x, edge_index) if not use_edge_attr else layer(x, edge_index, edge_attr=layer_edge_attr)
             x = self.activation(x)
             if hasattr(self, 'norm'):
                 x = self.norm(x)
@@ -313,12 +347,14 @@ class CNN_Final_VN_Model(torch.nn.Module):
                     layer_type='GATConv', activation='LeakyReLU', batches=False, 
                     edge_dim=None, **kwargs):
         super(CNN_Final_VN_Model, self).__init__()
-        # Initialize the first layer
-        graph_layer = globals()[layer_type]
-        self.initial = graph_layer(input, hidden, edge_dim=edge_dim)
+        # Initialize the first layer using factory function
+        self.initial = create_graph_layer(layer_type, input, hidden, edge_dim=edge_dim)
         
         # Initialize the subsequent layers
-        self.module_list = nn.ModuleList([graph_layer(hidden, hidden, edge_dim=edge_dim) for _ in range(layers - 1)])
+        self.module_list = nn.ModuleList([
+            create_graph_layer(layer_type, hidden, hidden, edge_dim=edge_dim) 
+            for _ in range(layers - 1)
+        ])
         
         # Output layer
         self.output = nn.Linear(hidden, output)
@@ -350,10 +386,14 @@ class CNN_Final_VN_Model(torch.nn.Module):
         # x = data.x
         # edge_index = data.edge_index
 
-        x = self.initial(x, edge_index, edge_attr=edge_attr)
+        # Only pass edge_attr to layers that support it
+        use_edge_attr = self.layer_type in LAYERS_WITH_EDGE_DIM
+        layer_edge_attr = edge_attr if use_edge_attr else None
+
+        x = self.initial(x, edge_index) if not use_edge_attr else self.initial(x, edge_index, edge_attr=layer_edge_attr)
         x = self.activation(x)
         for layer in self.module_list:
-            x = layer(x, edge_index, edge_attr=edge_attr)
+            x = layer(x, edge_index) if not use_edge_attr else layer(x, edge_index, edge_attr=layer_edge_attr)
             x = self.activation(x)
         
         if batch == None:
@@ -381,18 +421,22 @@ class GNN_Final_VN_Model(torch.nn.Module):
                     layer_type='GATConv', activation='LeakyReLU', batches=False, 
                     edge_dim=None, **kwargs):
         super(GNN_Final_VN_Model, self).__init__()
-        # Initialize the first layer
-        graph_layer = globals()[layer_type]
-        self.initial = graph_layer(input, hidden, edge_dim=edge_dim)
+        # Initialize the first layer using factory function
+        self.initial = create_graph_layer(layer_type, input, hidden, edge_dim=edge_dim)
         
         # Initialize the subsequent layers
-        self.module_list = nn.ModuleList([graph_layer(hidden, hidden, edge_dim=edge_dim) for _ in range(layers - 1)])
+        self.module_list = nn.ModuleList([
+            create_graph_layer(layer_type, hidden, hidden, edge_dim=edge_dim) 
+            for _ in range(layers - 1)
+        ])
         
         # Output layer
         self.output = torch.nn.Linear(hidden, output)
 
         # activation function
         self.activation = globals()[activation]()
+
+        self.layer_type = layer_type
 
         # code from Chen Cai
         self.virtualnode_embedding = torch.nn.Embedding(1, hidden)
@@ -411,10 +455,14 @@ class GNN_Final_VN_Model(torch.nn.Module):
                                         torch.nn.Linear(hidden, output), torch.nn.ReLU()))
                 
     def forward(self, x, edge_index, edge_attr=None, batch=None):
-        out = self.initial(x, edge_index, edge_attr=edge_attr)
+        # Only pass edge_attr to layers that support it
+        use_edge_attr = self.layer_type in LAYERS_WITH_EDGE_DIM
+        layer_edge_attr = edge_attr if use_edge_attr else None
+
+        out = self.initial(x, edge_index) if not use_edge_attr else self.initial(x, edge_index, edge_attr=layer_edge_attr)
         
         for layer in self.module_list:            
-            out = layer(out, edge_index, edge_attr=edge_attr)
+            out = layer(out, edge_index) if not use_edge_attr else layer(out, edge_index, edge_attr=layer_edge_attr)
             out = self.activation(out)
         
         #vn_emb = self.virtualnode_embedding(torch.zeros(1).to(edge_index.dtype).to(edge_index.device))
@@ -441,18 +489,22 @@ class GNN_VN_Model(torch.nn.Module):
         super(GNN_VN_Model, self).__init__()
 
         torch.manual_seed(1234567)
-        # Initialize the first layer
-        graph_layer = globals()[layer_type]
-        self.initial = graph_layer(input, hidden, edge_dim=edge_dim)
+        # Initialize the first layer using factory function
+        self.initial = create_graph_layer(layer_type, input, hidden, edge_dim=edge_dim)
         
         # Initialize the subsequent layers
-        self.module_list = nn.ModuleList([graph_layer(hidden, hidden, edge_dim=edge_dim) for _ in range(layers - 1)])
+        self.module_list = nn.ModuleList([
+            create_graph_layer(layer_type, hidden, hidden, edge_dim=edge_dim) 
+            for _ in range(layers - 1)
+        ])
         
         # Output layer
         self.output = torch.nn.Linear(hidden, output)
 
         # activation function
         self.activation = globals()[activation]()
+
+        self.layer_type = layer_type
 
         # code from Chen Cai
         self.virtualnode_embedding = torch.nn.Embedding(1, hidden)
@@ -469,7 +521,11 @@ class GNN_VN_Model(torch.nn.Module):
                                         torch.nn.Linear(hidden, hidden), torch.nn.ReLU()))
                 
     def forward(self, x, edge_index, edge_attr=None, batch=None):
-        out = self.initial(x, edge_index, edge_attr=edge_attr)
+        # Only pass edge_attr to layers that support it
+        use_edge_attr = self.layer_type in LAYERS_WITH_EDGE_DIM
+        layer_edge_attr = edge_attr if use_edge_attr else None
+
+        out = self.initial(x, edge_index) if not use_edge_attr else self.initial(x, edge_index, edge_attr=layer_edge_attr)
         
         if batch == None:
             vn_emb = self.virtualnode_embedding(torch.zeros(1).to(edge_index.dtype).to(edge_index.device))
@@ -480,7 +536,7 @@ class GNN_VN_Model(torch.nn.Module):
 
             out = out + vn_emb[batch.batch] if batch != None else out + vn_emb
             
-            out = layer(out, edge_index, edge_attr=edge_attr)
+            out = layer(out, edge_index) if not use_edge_attr else layer(out, edge_index, edge_attr=layer_edge_attr)
             if batch == None:
                 vn_emb  = global_add_pool(out, None, size=1) + vn_emb
             else:
@@ -493,22 +549,26 @@ class GNN_VN_Model(torch.nn.Module):
 class GNN_VN_Hierarchical(torch.nn.Module):
     def __init__(self, input=3, output=20, hidden=20, layers=2, 
                  layer_type='GATConv', activation='LeakyReLU', batches=False, num_vn=1, 
-                 n=100, m = 100, **kwargs):
+                 n=100, m = 100, edge_dim=None, **kwargs):
         super(GNN_VN_Hierarchical, self).__init__()
 
         torch.manual_seed(1234567)
-        # Initialize the first layer
-        graph_layer = globals()[layer_type]
-        self.initial = graph_layer(input, hidden)
+        # Initialize the first layer using factory function
+        self.initial = create_graph_layer(layer_type, input, hidden, edge_dim=edge_dim)
         
         # Initialize the subsequent layers
-        self.module_list = nn.ModuleList([graph_layer(hidden, hidden) for _ in range(layers - 1)])
+        self.module_list = nn.ModuleList([
+            create_graph_layer(layer_type, hidden, hidden, edge_dim=edge_dim) 
+            for _ in range(layers - 1)
+        ])
         
         # Output layer
         self.output = torch.nn.Linear(hidden, output)
 
         # activation function
         self.activation = globals()[activation]()
+
+        self.layer_type = layer_type
 
         # number of virtual nodes
         self.num_vn = num_vn

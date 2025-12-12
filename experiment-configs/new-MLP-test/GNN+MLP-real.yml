@@ -1,7 +1,7 @@
 train_data: generated/res01_phase1.npz
 test_data: generated/res01_phase2.npz
 epochs: 500
-device: cpu
+device: cuda
 batch_size: 256
 dataset_name: real/res01
 config: configs/w-64-hw-128-dropout.yml
