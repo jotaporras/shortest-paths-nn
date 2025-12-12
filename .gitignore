@@ -28,9 +28,6 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
-*.yaml
-configs/
-experiment-configs/
 output/
 images/
 *.ipynb

@@ -1,0 +1,21 @@
+w-64-hw-128-dropout:
+  # GNN/embedding module; for MLP layer_type this builds the siamese encoder.
+  gnn:
+    constr:
+      input: 3        # node feature dimension
+      hidden: 64      # width for hidden layers
+      output: 64      # embedding dimension written out
+      layers: 3
+    layer_norm: false
+    dropout: true
+    activation: lrelu
+
+  # Final MLP that maps paired embeddings to a distance prediction.
+  mlp:
+    constr:
+      input: 64       # will be doubled internally for aggr='sum+diff'
+      hidden: 128
+      output: 1
+      layers: 3
+    layer_norm: false
+    dropout: true
