@@ -10,7 +10,7 @@ vn: 0
 max: 1
 loss: mse_loss
 aggr: 'sum+diff'
-layer_type: 'MLP'
+layer_type: 'GATConv'
 p: 1
 include_edge_attr: 1
 finetune: 0

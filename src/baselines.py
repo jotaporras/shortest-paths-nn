@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 import torch.nn as nn
-from torch_geometric.nn import GCNConv, GINConv, GATConv, GCN2Conv, TransformerConv, to_hetero, GeneralConv, GATv2Conv,GCN
+from torch_geometric.nn import GCNConv, GINConv, GATConv, GCN2Conv, TransformerConv, to_hetero, GeneralConv, GATv2Conv,GCN,TAGConv
 from torch.nn import ReLU, LeakyReLU, Sigmoid, SiLU
 from torch_geometric.nn.conv import MessagePassing
 from torch_geometric.nn import aggr 

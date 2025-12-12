@@ -25,6 +25,18 @@ import copy
 
 import time
 
+ACTIVATION_ALIASES = {
+    'relu': 'ReLU',
+    'lrelu': 'LeakyReLU',
+    'silu': 'SiLU'
+}
+
+
+def normalize_activation(activation: str) -> str:
+    if not activation:
+        return activation
+    return ACTIVATION_ALIASES.get(activation.lower(), activation)
+
 from torch.profiler import profile, record_function, ProfilerActivity
 
 import wandb
@@ -122,6 +134,7 @@ def configure_embedding_module(model_config,
     layer_norm = model_config['layer_norm']
     dropout = model_config['dropout']
     activation = model_config['activation']
+    activation_for_gnn = normalize_activation(activation)
     if not new and 'MLP' in layer_type:
         embedding_module = initialize_mlp(**embedding_config, 
                                           activation=activation, 
@@ -132,7 +145,7 @@ def configure_embedding_module(model_config,
     else:
         embedding_module = GNNModel(layer_type=layer_type, 
                                     edge_dim=edge_dim, 
-                                    activation=activation, 
+                                    activation=activation_for_gnn, 
                                     layer_norm=layer_norm, 
                                     **embedding_config)
     return embedding_module
@@ -171,6 +184,7 @@ def train_terrains_decoupled(train_dictionary,
                             edge_attr=None, 
                             layer_norm=True,
                             new=True,
+                            run_name=None,
                             **kwargs):
     
     edge_dim=1
@@ -226,6 +240,7 @@ def train_terrains_decoupled(train_dictionary,
     run = wandb.init(
         project='terrains',
         dir=str(output_dir / 'wandb'),
+        name=run_name,
         config={
             "learning_rate": lr,
             "epochs": epochs,
@@ -288,7 +303,8 @@ def train_few_cross_terrain_case(train_dictionary,
                                 p=1, 
                                 aggr='sum',
                                 new=False,
-                                finetune_from=None):
+                                finetune_from=None,
+                                run_name=None):
     torch.manual_seed(0)
     num_graphs = len(train_dictionary['graphs'])
     edge_dim = 1
@@ -308,7 +324,7 @@ def train_few_cross_terrain_case(train_dictionary,
     mlp=None
 
     if siamese:
-        parameters = embedding_module.parameters()
+        parameters = embedding_module.parameters() #Thisis the one were using
     else:
         mlp = configure_mlp_module(model_config['mlp'], aggr=aggr, new=new)
         mlp = mlp.to(torch.double)
@@ -326,6 +342,7 @@ def train_few_cross_terrain_case(train_dictionary,
     run = wandb.init(
         project='terrains',
         dir=str(output_dir / 'wandb'),
+        name=run_name,
         config={
             "learning_rate": lr,
             "epochs": epochs,

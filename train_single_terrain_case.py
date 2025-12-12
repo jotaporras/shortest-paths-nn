@@ -139,7 +139,8 @@ def main():
                                         p = args.p,
                                         siamese=siamese,
                                         finetune_from=finetune_from,
-                                        new=args.new)
+                                        new=args.new,
+                                        run_name=f"terrain-graph-{args.layer_type}-stage1")
         
 if __name__=='__main__':
     main()

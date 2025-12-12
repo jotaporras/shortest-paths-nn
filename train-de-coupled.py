@@ -157,7 +157,8 @@ def main():
                                     lr =args.lr,
                                     p=args.p, 
                                     aggr=aggr, 
-                                    new=args.new)
+                                    new=args.new,
+                                    run_name=f"terrain-graph-{args.layer_type}-stage2")
     
 if __name__=='__main__':
     main()
