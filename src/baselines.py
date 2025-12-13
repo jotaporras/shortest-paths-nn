@@ -6,7 +6,7 @@ from torch_geometric.nn import GCNConv, GINConv, GATConv, GCN2Conv, TransformerC
 from torch.nn import ReLU, LeakyReLU, Sigmoid, SiLU
 from torch_geometric.nn.conv import MessagePassing
 from torch_geometric.nn import aggr 
-from torch_geometric.nn.norm import LayerNorm
+from torch_geometric.nn.norm import LayerNormq
 
 # import torch_geometric.graphgym.models.head  # noqa, register module
 # import torch_geometric.graphgym.register as register
@@ -390,6 +390,7 @@ class CNN_Final_VN_Model(torch.nn.Module):
         use_edge_attr = self.layer_type in LAYERS_WITH_EDGE_DIM
         layer_edge_attr = edge_attr if use_edge_attr else None
 
+        # Don't pass edge_attr to the initial layer if it doesn't support it
         x = self.initial(x, edge_index) if not use_edge_attr else self.initial(x, edge_index, edge_attr=layer_edge_attr)
         x = self.activation(x)
         for layer in self.module_list:
@@ -608,8 +609,6 @@ class GNN_VN_Hierarchical(torch.nn.Module):
             for mlp_layer in self.mlp_virtualnode_list:
                 vn_direct = mlp_layer(vn_direct)
                 vn_root = mlp_layer(vn_root)
-            
-            
         return out
         
 
