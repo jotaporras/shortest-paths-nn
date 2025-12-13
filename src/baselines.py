@@ -6,7 +6,7 @@ from torch_geometric.nn import GCNConv, GINConv, GATConv, GCN2Conv, TransformerC
 from torch.nn import ReLU, LeakyReLU, Sigmoid, SiLU
 from torch_geometric.nn.conv import MessagePassing
 from torch_geometric.nn import aggr 
-from torch_geometric.nn.norm import LayerNormq
+from torch_geometric.nn.norm import LayerNorm
 
 # import torch_geometric.graphgym.models.head  # noqa, register module
 # import torch_geometric.graphgym.register as register

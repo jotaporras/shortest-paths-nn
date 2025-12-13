@@ -88,7 +88,7 @@ def main():
     parser.add_argument('--new', action='store_true')
     parser.add_argument('--single-terrain-per-model', action='store_true')
     parser.add_argument('--artificial', action='store_true')
-
+    parser.add_argument('--wandb-tag', type=str, default=None)
 
     args = parser.parse_args()
 
@@ -158,7 +158,8 @@ def main():
                                     p=args.p, 
                                     aggr=aggr, 
                                     new=args.new,
-                                    run_name=f"terrain-graph-{args.layer_type}-stage2")
+                                    run_name=f"terrain-graph-{args.layer_type}-stage2",
+                                    wandb_tag=args.wandb_tag)
     
 if __name__=='__main__':
     main()

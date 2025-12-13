@@ -185,6 +185,7 @@ def train_terrains_decoupled(train_dictionary,
                             layer_norm=True,
                             new=True,
                             run_name=None,
+                            wandb_tag=None,
                             **kwargs):
     
     edge_dim=1
@@ -241,6 +242,7 @@ def train_terrains_decoupled(train_dictionary,
         project='terrains',
         dir=str(output_dir / 'wandb'),
         name=run_name,
+        tags=[wandb_tag] if wandb_tag else None,
         config={
             "learning_rate": lr,
             "epochs": epochs,
@@ -304,7 +306,8 @@ def train_few_cross_terrain_case(train_dictionary,
                                 aggr='sum',
                                 new=False,
                                 finetune_from=None,
-                                run_name=None):
+                                run_name=None,
+                                wandb_tag=None):
     torch.manual_seed(0)
     num_graphs = len(train_dictionary['graphs'])
     edge_dim = 1
@@ -343,6 +346,7 @@ def train_few_cross_terrain_case(train_dictionary,
         project='terrains',
         dir=str(output_dir / 'wandb'),
         name=run_name,
+        tags=[wandb_tag] if wandb_tag else None,
         config={
             "learning_rate": lr,
             "epochs": epochs,
