@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=sparse-gt-terrain
-#SBATCH --output=/home/jporras/sourcecode/shortest-paths-nn/logs/slurm-%A_%a.out
+#SBATCH --output=/vast/projects/aribeiro/alelab/jporras/shortest-paths-nn/slurm-e19AB-ablations-%A_%a.out
 #SBATCH --time=24:00:00
 #SBATCH --partition=dgx-b200
 #SBATCH --ntasks=1
