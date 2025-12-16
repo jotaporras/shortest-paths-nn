@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=sparse-gt-terrain
 #SBATCH --output=/home/jporras/sourcecode/shortest-paths-nn/logs/slurm-%A_%a.out
-#SBATCH --time=8:00:00
+#SBATCH --time=24:00:00
 #SBATCH --partition=gpu
 #SBATCH --ntasks=1
 #SBATCH --gpus=1
@@ -9,7 +9,7 @@
 #SBATCH --mem=64G
 #SBATCH --array=0-19
 
-# Sparse GT training across all terrain resolutions (res01-res20)
+# Sparse GT full pipeline (Phase 1 + Phase 2) across all terrain resolutions (res01-res20)
 # Usage: sbatch scripts/sparse_gt_all_resolutions.sbatch
 # Override defaults: TRIAL=2 WANDB_TAG=my_tag sbatch scripts/sparse_gt_all_resolutions.sbatch
 
@@ -42,7 +42,6 @@ log() {
 # -----------------------------------------------------------------------------
 # Resolution Mapping
 # -----------------------------------------------------------------------------
-# Map array task ID (0-19) to resolution (01-20)
 TASK_ID=${SLURM_ARRAY_TASK_ID:-0}
 TOTAL_TASKS=20
 
@@ -59,12 +58,23 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# Common Arguments
+# Phase 1: GNN Training
 # -----------------------------------------------------------------------------
-COMMON_ARGS=(
+log "========================================"
+log "=== Phase 1: GNN Training ==="
+log "========================================"
+log "  Resolution: res${RES} (task $((TASK_ID + 1))/${TOTAL_TASKS})"
+log "  Batch size: ${BATCH_SIZE}"
+log "  Trial: ${TRIAL}"
+log "  Wandb tag: ${WANDB_TAG}"
+
+PHASE1_ARGS=(
+    --train-data "generated/res${RES}_phase1.npz"
     --test-data generated/full_test-001.npz
     --epochs 500
     --device cuda
+    --batch-size "$BATCH_SIZE"
+    --dataset-name "norway/res${RES}"
     --config configs/sparse-gt-rpearl.yml
     --siamese 1
     --vn 0
@@ -80,33 +90,56 @@ COMMON_ARGS=(
     --wandb-tag "$WANDB_TAG"
 )
 
+log "Command: python train_single_terrain_case.py ${PHASE1_ARGS[*]}"
+python train_single_terrain_case.py "${PHASE1_ARGS[@]}"
+
+log "Phase 1 completed for res${RES}"
+
 # -----------------------------------------------------------------------------
-# Resolution-Specific Arguments
+# Phase 2: MLP Finetuning
 # -----------------------------------------------------------------------------
-VARIANT_ARGS=(
-    --train-data "generated/res${RES}_phase1.npz"
-    --dataset-name "norway/res${RES}"
+log ""
+log "========================================"
+log "=== Phase 2: MLP Finetuning ==="
+log "========================================"
+
+# Phase 1 model path (must match format_log_dir output structure)
+PHASE1_MODEL="models/single_dataset/norway/res${RES}/SparseGT/no-vn/siamese/p-4/mse_loss/sparse-gt-rpearl/${TRIAL}/new"
+
+if [ ! -f "${PHASE1_MODEL}/final_model.pt" ]; then
+    log "ERROR: Phase 1 model not found at ${PHASE1_MODEL}/final_model.pt"
+    log "Phase 1 may have failed - check logs above"
+    exit 1
+fi
+
+log "  Loading GNN from: ${PHASE1_MODEL}"
+
+PHASE2_ARGS=(
+    --finetune-from "$PHASE1_MODEL"
+    --train-data "generated/res${RES}_phase2.npz"
+    --epochs 1000
+    --device cuda
     --batch-size "$BATCH_SIZE"
+    --dataset-name "res${RES}_phase2"
+    --config configs/sparse-gt-rpearl.yml
+    --siamese 1
+    --vn 0
+    --layer-type SparseGT
+    --aggr 'sum+diff'
+    --p 4
+    --loss mse_loss
+    --include-edge-attr 1
+    --lr 0.001
+    --trial "$TRIAL"
+    --new
+    --single-terrain-per-model
+    --wandb-tag "${WANDB_TAG}_phase2"
 )
 
-# -----------------------------------------------------------------------------
-# Launch Training
-# -----------------------------------------------------------------------------
-log "=== Sparse GT Training ==="
-log "  Resolution: res${RES} (task $((TASK_ID + 1))/${TOTAL_TASKS})"
-log "  Batch size: ${BATCH_SIZE}"
-log "  Trial: ${TRIAL}"
-log "  Wandb tag: ${WANDB_TAG}"
+log "Command: python train-de-coupled.py ${PHASE2_ARGS[*]}"
+python train-de-coupled.py "${PHASE2_ARGS[@]}"
 
-CMD=(
-    python
-    train_single_terrain_case.py
-)
-CMD+=("${COMMON_ARGS[@]}")
-CMD+=("${VARIANT_ARGS[@]}")
-
-log "Command: ${CMD[*]}"
-"${CMD[@]}"
-
-log "Completed res${RES}"
-
+log ""
+log "========================================"
+log "=== Completed res${RES} (Phase 1 + Phase 2) ==="
+log "========================================"
