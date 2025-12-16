@@ -2,7 +2,7 @@
 #SBATCH --job-name=sparse-gt-terrain
 #SBATCH --output=/home/jporras/sourcecode/shortest-paths-nn/logs/slurm-%A_%a.out
 #SBATCH --time=24:00:00
-#SBATCH --partition=gpu
+#SBATCH --partition=dgx-b200
 #SBATCH --ntasks=1
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=8
