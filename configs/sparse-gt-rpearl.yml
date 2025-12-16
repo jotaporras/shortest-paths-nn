@@ -1,0 +1,36 @@
+# Sparse GT + RPEARL configuration for terrain graph experiments
+# Usage: --config configs/sparse-gt-rpearl.yml --layer-type SparseGT
+
+sparse-gt-rpearl:
+  # GNN/embedding module configuration
+  gnn:
+    constr:
+      input: 3        # node feature dimension (x, y, z coordinates)
+      hidden: 64      # width for hidden layers (used as fallback if sparse_gt.hidden_dim not set)
+      output: 64      # embedding dimension written out
+      layers: 3       # (not used by SparseGT, see sparse_gt.num_layers)
+    layer_norm: false # (not used by SparseGT, has its own LayerNorm)
+    dropout: true     # (not used by SparseGT, see sparse_gt.dropout)
+    activation: lrelu # (not used by SparseGT, uses ReLU internally)
+    
+    # Sparse GT specific configuration
+    sparse_gt:
+      hidden_dim: 64        # d_model for attention layers
+      num_layers: 3         # number of sparse attention layers
+      num_heads: 4          # number of attention heads (must divide hidden_dim)
+      num_hops: 3           # k-hop neighborhood size for attention window
+      rpearl_samples: 30    # number of random samples M for RPEARL
+      rpearl_num_layers: 5  # number of GCN layers in RPEARL
+      dropout: 0.3          # dropout probability
+      attn_dropout: 0.1     # attention dropout probability
+
+  # Final MLP that maps paired embeddings to a distance prediction
+  mlp:
+    constr:
+      input: 64       # will be doubled internally for aggr='sum+diff'
+      hidden: 128
+      output: 1
+      layers: 3
+    layer_norm: false
+    dropout: true
+

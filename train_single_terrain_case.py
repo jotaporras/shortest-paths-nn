@@ -107,8 +107,11 @@ def main():
             print("Number of nodes:", len(train_node_features))
             train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
 
-            edge_attr = torch.tensor(train_edge_attr)
-            edge_attr = edge_attr.unsqueeze(-1)
+            if train_edge_attr is not None:
+                edge_attr = torch.tensor(train_edge_attr)
+                edge_attr = edge_attr.unsqueeze(-1)
+            else:
+                edge_attr = None
             edge_dim = 1
             graph_data = Data(x=train_node_features, edge_index=train_edge_index, edge_attr=edge_attr)        
             train_dictionary = {'graphs': [graph_data], 'dataloaders': [train_dataloader]}
@@ -143,6 +146,9 @@ def main():
                 "model_config_name": modelname,
             }
             
+            # Extract resolution from dataset_name (e.g., "norway/res17" -> "res17")
+            res_part = dataset_name.split('/')[-1] if '/' in dataset_name else dataset_name
+            
             train_few_cross_terrain_case(train_dictionary=train_dictionary,
                                         model_config = config,
                                         layer_type = args.layer_type,
@@ -156,7 +162,7 @@ def main():
                                         siamese=siamese,
                                         finetune_from=finetune_from,
                                         new=args.new,
-                                        run_name=f"terrain-graph-{args.layer_type}-stage1",
+                                        run_name=f"terrain-graph-{args.layer_type}-{res_part}-stage1",
                                         wandb_tag=args.wandb_tag,
                                         wandb_config=wandb_config)
         

@@ -162,6 +162,9 @@ def main():
                 "finetune_from": prev_model_file_pth,
             }
             
+            # Extract resolution from dataset_name (e.g., "norway/res17" -> "res17")
+            res_part = dataset_name.split('/')[-1] if '/' in dataset_name else dataset_name
+            
             train_terrains_decoupled(train_dictionary = train_dictionary,
                                     model_config = config, 
                                     layer_type = args.layer_type, 
@@ -174,7 +177,7 @@ def main():
                                     p=args.p, 
                                     aggr=aggr, 
                                     new=args.new,
-                                    run_name=f"terrain-graph-{args.layer_type}-stage2",
+                                    run_name=f"terrain-graph-{args.layer_type}-{res_part}-stage2",
                                     wandb_tag=args.wandb_tag,
                                     wandb_config=wandb_config)
     

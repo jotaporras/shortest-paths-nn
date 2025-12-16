@@ -6,6 +6,7 @@ from torch_geometric.loader import DataLoader
 
 from src.baselines import *
 from src.loss_funcs import *
+from src.custom_models import SparseGTWithRPEARL
 import numpy as np
 import torch
 import torch.nn as nn
@@ -142,6 +143,21 @@ def configure_embedding_module(model_config,
                                           dropout=dropout)
     elif 'MLP' in layer_type and new:
         embedding_module = NewMLP(**embedding_config, add_norm=layer_norm)
+    elif layer_type == 'SparseGT':
+        # SparseGT with RPEARL positional encodings
+        sparse_gt_config = model_config.get('sparse_gt', {})
+        embedding_module = SparseGTWithRPEARL(
+            input_dim=embedding_config.get('input', 3),
+            hidden_dim=sparse_gt_config.get('hidden_dim', embedding_config.get('hidden', 64)),
+            output_dim=embedding_config.get('output', 64),
+            num_layers=sparse_gt_config.get('num_layers', 3),
+            num_heads=sparse_gt_config.get('num_heads', 4),
+            num_hops=sparse_gt_config.get('num_hops', 2),
+            rpearl_samples=sparse_gt_config.get('rpearl_samples', 30),
+            rpearl_num_layers=sparse_gt_config.get('rpearl_num_layers', 3),
+            dropout=sparse_gt_config.get('dropout', 0.3),
+            attn_dropout=sparse_gt_config.get('attn_dropout', 0.1),
+        )
     else:
         embedding_module = GNNModel(layer_type=layer_type, 
                                     edge_dim=edge_dim, 
@@ -255,6 +271,10 @@ def train_terrains_decoupled(train_dictionary,
     # Merge with any additional config passed from training script
     if wandb_config:
         base_config.update(wandb_config)
+    
+    # Add Sparse GT config if using SparseGT layer type
+    if layer_type == 'SparseGT' and hasattr(embedding_module, 'get_config_for_wandb'):
+        base_config.update(embedding_module.get_config_for_wandb())
     
     run = wandb.init(
         project='terrains',
@@ -373,6 +393,10 @@ def train_few_cross_terrain_case(train_dictionary,
     # Merge with any additional config passed from training script
     if wandb_config:
         base_config.update(wandb_config)
+    
+    # Add Sparse GT config if using SparseGT layer type
+    if layer_type == 'SparseGT' and hasattr(embedding_module, 'get_config_for_wandb'):
+        base_config.update(embedding_module.get_config_for_wandb())
     
     run = wandb.init(
         project='terrains',
