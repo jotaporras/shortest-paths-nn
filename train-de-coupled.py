@@ -146,6 +146,22 @@ def main():
             print(modelname, config)
             model_to_finetune_from_pth = prev_model_file_pth.replace('<modelname>', modelname)
             
+            # Build wandb config with all command-line arguments
+            wandb_config = {
+                "dataset_name": dataset_name,
+                "train_data": args.train_data,
+                "batch_size": args.batch_size,
+                "config_file": args.config,
+                "siamese": siamese,
+                "vn": vn,
+                "include_edge_attr": args.include_edge_attr,
+                "trial": trial,
+                "single_terrain_per_model": args.single_terrain_per_model,
+                "artificial": args.artificial,
+                "model_config_name": modelname,
+                "finetune_from": prev_model_file_pth,
+            }
+            
             train_terrains_decoupled(train_dictionary = train_dictionary,
                                     model_config = config, 
                                     layer_type = args.layer_type, 
@@ -159,7 +175,8 @@ def main():
                                     aggr=aggr, 
                                     new=args.new,
                                     run_name=f"terrain-graph-{args.layer_type}-stage2",
-                                    wandb_tag=args.wandb_tag)
+                                    wandb_tag=args.wandb_tag,
+                                    wandb_config=wandb_config)
     
 if __name__=='__main__':
     main()

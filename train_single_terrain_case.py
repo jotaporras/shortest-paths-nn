@@ -128,6 +128,21 @@ def main():
             config=model_configs[modelname]
             print(modelname, config)
 
+            # Build wandb config with all command-line arguments
+            wandb_config = {
+                "dataset_name": dataset_name,
+                "train_data": args.train_data,
+                "test_data": args.test_data,
+                "batch_size": args.batch_size,
+                "config_file": args.config,
+                "vn": vn,
+                "include_edge_attr": args.include_edge_attr,
+                "trial": trial,
+                "finetune": finetune,
+                "artificial": args.artificial,
+                "model_config_name": modelname,
+            }
+            
             train_few_cross_terrain_case(train_dictionary=train_dictionary,
                                         model_config = config,
                                         layer_type = args.layer_type,
@@ -142,7 +157,8 @@ def main():
                                         finetune_from=finetune_from,
                                         new=args.new,
                                         run_name=f"terrain-graph-{args.layer_type}-stage1",
-                                        wandb_tag=args.wandb_tag)
+                                        wandb_tag=args.wandb_tag,
+                                        wandb_config=wandb_config)
         
 if __name__=='__main__':
     main()

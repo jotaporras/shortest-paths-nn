@@ -186,6 +186,7 @@ def train_terrains_decoupled(train_dictionary,
                             new=True,
                             run_name=None,
                             wandb_tag=None,
+                            wandb_config=None,
                             **kwargs):
     
     edge_dim=1
@@ -238,17 +239,29 @@ def train_terrains_decoupled(train_dictionary,
     logging.info(f'MLP aggregation: {aggr}')
     logging.info(f'loss function: {loss_func}')
 
+    # Build wandb config with all relevant parameters
+    base_config = {
+        "learning_rate": lr,
+        "epochs": epochs,
+        "p": p,
+        "previous_model_path": prev_model_pth,
+        "layer_type": layer_type,
+        "device": device,
+        "finetune_dataset_name": finetune_dataset_name,
+        "loss_func": loss_func,
+        "aggr": aggr,
+        "new": new,
+    }
+    # Merge with any additional config passed from training script
+    if wandb_config:
+        base_config.update(wandb_config)
+    
     run = wandb.init(
         project='terrains',
         dir=str(output_dir / 'wandb'),
         name=run_name,
         tags=[wandb_tag] if wandb_tag else None,
-        config={
-            "learning_rate": lr,
-            "epochs": epochs,
-            "p": p,
-            "previous model path": prev_model_pth
-        }
+        config=base_config
     )
 
     optimizer = AdamW(mlp.parameters(), lr=lr)
@@ -307,7 +320,8 @@ def train_few_cross_terrain_case(train_dictionary,
                                 new=False,
                                 finetune_from=None,
                                 run_name=None,
-                                wandb_tag=None):
+                                wandb_tag=None,
+                                wandb_config=None):
     torch.manual_seed(0)
     num_graphs = len(train_dictionary['graphs'])
     edge_dim = 1
@@ -342,17 +356,30 @@ def train_few_cross_terrain_case(train_dictionary,
     log_file = os.path.join(record_dir, 'training_log.log')
     logging.basicConfig(level=logging.INFO, filename=log_file)
 
+    # Build wandb config with all relevant parameters
+    base_config = {
+        "learning_rate": lr,
+        "epochs": epochs,
+        "siamese": siamese,
+        "p": p,
+        "layer_type": layer_type,
+        "device": device,
+        "loss_func": loss_func,
+        "aggr": aggr,
+        "new": new,
+        "finetune_from": finetune_from,
+        "log_dir": log_dir,
+    }
+    # Merge with any additional config passed from training script
+    if wandb_config:
+        base_config.update(wandb_config)
+    
     run = wandb.init(
         project='terrains',
         dir=str(output_dir / 'wandb'),
         name=run_name,
         tags=[wandb_tag] if wandb_tag else None,
-        config={
-            "learning_rate": lr,
-            "epochs": epochs,
-            "siamese": siamese,
-            "p": p
-        }
+        config=base_config
     )
 
     if not os.path.exists(record_dir):
