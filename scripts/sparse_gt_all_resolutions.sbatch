@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=sparse-gt-terrain
-#SBATCH --output=/vast/projects/aribeiro/alelab/jporras/shortest-paths-nn/slurm-e19AB-ablations-%A_%a.out
+#SBATCH --output=/vast/projects/aribeiro/alelab/jporras/shortest-paths-nn/slurm-e21-sparse-gt-terrain-%A_%a.out
 #SBATCH --time=24:00:00
 #SBATCH --partition=dgx-b200
 #SBATCH --ntasks=1
@@ -18,15 +18,19 @@ set -euo pipefail
 # -----------------------------------------------------------------------------
 # Configuration (override via environment variables)
 # -----------------------------------------------------------------------------
-PROJECT_DIR=${PROJECT_DIR:-/home/jporras/sourcecode/shortest-paths-nn}
+PROJECT_DIR=${PROJECT_DIR:-/vast/home/j/jporras/sourcecode/shortest-paths-nn}
+OUTPUT_DIR=${OUTPUT_DIR:-/vast/projects/aribeiro/alelab/jporras/shortest-paths-nn}
 TRIAL=${TRIAL:-1}
 WANDB_TAG=${WANDB_TAG:-e21_sparse_gt_terrain}
-ENV_NAME=${ENV_NAME:-}  # Set to conda env path if needed
+ENV_NAME=${ENV_NAME:-shortest-paths-nn}  # Set to conda env path if needed
 
 # -----------------------------------------------------------------------------
 # Environment Setup
 # -----------------------------------------------------------------------------
 cd "$PROJECT_DIR"
+
+# Set output directory for models (used by training scripts via TERRAIN_OUTPUT_DIR)
+export TERRAIN_OUTPUT_DIR="$OUTPUT_DIR"
 
 log() {
     echo "[$(date --iso-8601=seconds)] $*"
@@ -67,6 +71,7 @@ log "  Resolution: res${RES} (task $((TASK_ID + 1))/${TOTAL_TASKS})"
 log "  Batch size: ${BATCH_SIZE}"
 log "  Trial: ${TRIAL}"
 log "  Wandb tag: ${WANDB_TAG}"
+log "  Output dir: ${OUTPUT_DIR}"
 
 PHASE1_ARGS=(
     --train-data "generated/res${RES}_phase1.npz"
@@ -104,7 +109,7 @@ log "=== Phase 2: MLP Finetuning ==="
 log "========================================"
 
 # Phase 1 model path (must match format_log_dir output structure)
-PHASE1_MODEL="models/single_dataset/norway/res${RES}/SparseGT/no-vn/siamese/p-4/mse_loss/sparse-gt-rpearl/${TRIAL}/new"
+PHASE1_MODEL="${OUTPUT_DIR}/models/single_dataset/norway/res${RES}/SparseGT/no-vn/siamese/p-4/mse_loss/sparse-gt-rpearl/${TRIAL}/new"
 
 if [ ! -f "${PHASE1_MODEL}/final_model.pt" ]; then
     log "ERROR: Phase 1 model not found at ${PHASE1_MODEL}/final_model.pt"
