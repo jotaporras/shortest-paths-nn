@@ -527,8 +527,8 @@ class SparseGTWithRPEARL(nn.Module):
         Returns:
             Node embeddings [num_nodes, output_dim]
         """
-        # Ensure float32 dtype (dataset may provide float64)
-        x = x.float()
+        # Ensure input dtype matches model weights
+        x = x.to(dtype=self.input_projection.weight.dtype)
         
         # Create Data object for internal processing
         data = Data(x=x, edge_index=edge_index)
