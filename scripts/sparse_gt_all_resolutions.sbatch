@@ -36,7 +36,7 @@ log() {
     echo "[$(date --iso-8601=seconds)] $*"
 }
 
-Conda activation (uncomment and modify if using conda)
+# Conda activation (uncomment and modify if using conda)
 
 module load anaconda3
 source "$(conda info --base)/etc/profile.d/conda.sh"
