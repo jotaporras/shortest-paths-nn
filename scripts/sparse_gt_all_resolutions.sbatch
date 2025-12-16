@@ -36,12 +36,11 @@ log() {
     echo "[$(date --iso-8601=seconds)] $*"
 }
 
-# Conda activation (uncomment and modify if using conda)
-# if [ -n "$ENV_NAME" ]; then
-#     module load anaconda3
-#     source "$(conda info --base)/etc/profile.d/conda.sh"
-#     conda activate "$ENV_NAME"
-# fi
+Conda activation (uncomment and modify if using conda)
+
+module load anaconda3
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate "$ENV_NAME"
 
 # -----------------------------------------------------------------------------
 # Resolution Mapping
