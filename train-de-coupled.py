@@ -88,7 +88,7 @@ def main():
     parser.add_argument('--new', action='store_true')
     parser.add_argument('--single-terrain-per-model', action='store_true')
     parser.add_argument('--artificial', action='store_true')
-    parser.add_argument('--wandb-tag', type=str, default=None)
+    parser.add_argument('--wandb-tag', type=str, nargs='+', default=None)
 
     args = parser.parse_args()
 

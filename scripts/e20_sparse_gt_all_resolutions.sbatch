@@ -21,7 +21,7 @@ set -euo pipefail
 PROJECT_DIR=${PROJECT_DIR:-/vast/home/j/jporras/sourcecode/shortest-paths-nn}
 OUTPUT_DIR=${OUTPUT_DIR:-/vast/projects/aribeiro/alelab/jporras/shortest-paths-nn}
 TRIAL=${TRIAL:-1}
-WANDB_TAG=${WANDB_TAG:-e21_sparse_gt_terrain}
+WANDB_TAG=${WANDB_TAG:-e20TG_neurogf_terrain_graphs}
 ENV_NAME=${ENV_NAME:-shortest-paths-nn}  # Set to conda env path if needed
 
 # -----------------------------------------------------------------------------

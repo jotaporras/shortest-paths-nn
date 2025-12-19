@@ -59,7 +59,7 @@ def main():
     parser.add_argument('--new', action='store_true')
     parser.add_argument('--finetune-from', type=str, default='none')
     parser.add_argument('--artificial', action='store_true')
-    parser.add_argument('--wandb-tag', type=str, default=None)
+    parser.add_argument('--wandb-tag', type=str, nargs='+', default=None)
 
     args = parser.parse_args()
     siamese = True if args.siamese == 1 else False

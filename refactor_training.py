@@ -280,7 +280,7 @@ def train_terrains_decoupled(train_dictionary,
         project='terrains',
         dir=str(output_dir / 'wandb'),
         name=run_name,
-        tags=[wandb_tag] if wandb_tag else None,
+        tags=wandb_tag if wandb_tag else None,
         config=base_config
     )
 
@@ -402,7 +402,7 @@ def train_few_cross_terrain_case(train_dictionary,
         project='terrains',
         dir=str(output_dir / 'wandb'),
         name=run_name,
-        tags=[wandb_tag] if wandb_tag else None,
+        tags=wandb_tag if wandb_tag else None,
         config=base_config
     )
 
