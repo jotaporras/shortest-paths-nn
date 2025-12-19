@@ -405,7 +405,8 @@ def main():
         print('resolution:', res)
         if args.change_heights:
             for k in range(1, 60):
-                filename = f'/data/sam/terrain/data/{args.name}/uncertainty/50/50k-{k}.npz'
+                #TODO this doesnt matter is a dead path
+                filename = f'/data/terrain/datasets/norway/uncertainty/50/50k-{k}.npz'
                 uncertainty = np.random.uniform(-0.050, 0.050, size=elevations_n.shape)
                 elevations_n = uncertainty + elevations_n
                 

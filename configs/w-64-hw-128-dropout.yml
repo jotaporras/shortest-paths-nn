@@ -4,7 +4,7 @@ w-64-hw-128-dropout:
     constr:
       input: 3        # node feature dimension
       hidden: 64      # width for hidden layers
-      output: 64      # embedding dimension written out
+      output: 64      # emxbedding dimension written out
       layers: 3
     layer_norm: false
     dropout: true
