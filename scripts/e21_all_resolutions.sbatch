@@ -58,7 +58,7 @@ log "========================================"
 log "=== e21 Experiment: res${RES} ==="
 log "========================================"
 log "  Resolution: res${RES} (task $((TASK_ID + 1))/${TOTAL_TASKS})"
-log "  Batch size: ${BATCH_SIZE}"
+log "  Batch size: ${BATCH_SIZE}"`
 log "  Trial: ${TRIAL}"
 log "  Wandb tag: ${WANDB_TAG}"
 log "  Output dir: ${OUTPUT_DIR}"
