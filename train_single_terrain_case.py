@@ -20,6 +20,7 @@ from pathlib import Path
 import csv
 
 from refactor_training import *
+import refactor_training
 
 REPO_ROOT = Path(__file__).resolve().parent
 output_dir = Path(os.environ.get('TERRAIN_OUTPUT_DIR', REPO_ROOT))
@@ -140,8 +141,6 @@ def main():
                                     args.layer_type,
                                     args.p,
                                     args.trial)
-            if args.new:
-                log_dir = os.path.join(log_dir, 'new')
             config=model_configs[modelname]
             print(modelname, config)
 
@@ -163,7 +162,7 @@ def main():
             # Extract resolution from dataset_name (e.g., "norway/res17" -> "res17")
             res_part = dataset_name.split('/')[-1] if '/' in dataset_name else dataset_name
             
-            train_few_cross_terrain_case(train_dictionary=train_dictionary,
+            refactor_training.train_few_cross_terrain_case(train_dictionary=train_dictionary,
                                         model_config = config,
                                         layer_type = args.layer_type,
                                         device = args.device,
@@ -171,7 +170,7 @@ def main():
                                         lr= args.lr,
                                         loss_func=args.loss,
                                         aggr = aggr, 
-                                        log_dir=log_dir,
+                                        base_log_dir=log_dir,
                                         p = args.p,
                                         siamese=siamese,
                                         finetune_from=finetune_from,

@@ -8,6 +8,7 @@ from src.baselines import *
 from src.loss_funcs import *
 from src.custom_models import SparseGTWithRPEARL
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 from torchmetrics.regression import MeanAbsolutePercentageError
@@ -67,6 +68,7 @@ def compute_metrics(embedding_module, mlp, dataloader, graph_data, device,
     total_nmae = 0.0
     total_samples = 0
     
+    pred_results = []
     for batch in dataloader:
         srcs = batch[0].to(device, non_blocking=True)
         tars = batch[1].to(device, non_blocking=True)
@@ -95,6 +97,24 @@ def compute_metrics(embedding_module, mlp, dataloader, graph_data, device,
         total_mae += mae_loss(pred, lengths).item() * batch_size
         total_nmae += nmae_loss(pred, lengths).item() * batch_size
         total_samples += batch_size
+
+        pred_mses = torch.square(pred - lengths)
+        pred_maes = torch.abs(pred - lengths)
+        pred_nmaes = torch.abs(pred - lengths) / lengths
+        # Generate predictions 
+        result = (srcs.cpu().numpy(), 
+                  tars.cpu().numpy(), 
+                  pred.cpu().numpy(), 
+                  lengths.cpu().numpy(), 
+                  pred_mses.cpu().numpy(), 
+                  pred_maes.cpu().numpy(), 
+                  pred_nmaes.cpu().numpy()
+        )
+        pred_results.append(result)
+    
+    all_preds = np.array([np.concatenate(batch_results) for batch_results in zip(*pred_results)]).squeeze().T # (B*BS, 8)
+    all_preds_df = pd.DataFrame(all_preds, columns=['srcs', 'tars', 'preds', 'lengths', 'pred_mses', 'pred_maes', 'pred_nmaes'])
+
     
     embedding_module.train()
     if mlp is not None:
@@ -105,6 +125,7 @@ def compute_metrics(embedding_module, mlp, dataloader, graph_data, device,
         'mse': total_mse / total_samples,
         'mae': total_mae / total_samples,
         'nmae': total_nmae / total_samples,
+        'all_preds_df': all_preds_df,
     }
 
 
@@ -215,11 +236,7 @@ def format_log_dir(output_dir,
     log_dir = os.path.join(output_dir, 
                            'models',
                            'single_dataset', 
-                           dataset_name, 
-                           layer_type,
-                           'vn' if vn else 'no-vn',
-                           'siamese' if siamese else 'mlp',
-                           f'p-{p}')
+                           dataset_name)
     if not siamese:
         log_dir = os.path.join(log_dir, aggr)
     log_dir = os.path.join(log_dir, loss_func, modelname, trial)
@@ -359,18 +376,6 @@ def train_terrains_decoupled(train_dictionary,
                 node_embeddings = embedding_module(graph_data.x, graph_data.edge_index, edge_attr=graph_data.edge_attr)
             test_dictionary['embeddings'].append(node_embeddings)
         
-    record_dir = os.path.join(prev_model_pth, finetune_dataset_name)
-    if not os.path.exists(record_dir):
-        os.makedirs(record_dir)
-
-    log_file = os.path.join(record_dir, 'training_log.log')
-    logging.basicConfig(level=logging.INFO, filename=log_file)
-
-    logging.info(f'GNN layer: {layer_type}')
-    logging.info(f'Number of epochs: {epochs}')
-    logging.info(f'MLP aggregation: {aggr}')
-    logging.info(f'loss function: {loss_func}')
-
     # Build wandb config with all relevant parameters
     base_config = {
         "learning_rate": lr,
@@ -392,6 +397,7 @@ def train_terrains_decoupled(train_dictionary,
     if layer_type == 'SparseGT' and hasattr(embedding_module, 'get_config_for_wandb'):
         base_config.update(embedding_module.get_config_for_wandb())
     
+    # Initialize wandb first to get run ID
     run = wandb.init(
         project=os.environ.get('WANDB_PROJECT', 'terrains'),
         dir=str(output_dir / 'wandb'),
@@ -399,10 +405,30 @@ def train_terrains_decoupled(train_dictionary,
         tags=wandb_tag if wandb_tag else None,
         config=base_config
     )
+    
+    # Create log directory based on run_name and wandb run ID
+    # Format: {run_name}_{wandb_id}/{finetune_dataset_name}
+    train_filename = run_name if run_name else 'train'
+    run_dir_name = f"{train_filename}_{run.id}"
+    log_dir = os.path.join(output_dir, 'runs', run_dir_name, finetune_dataset_name)
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # Update wandb config with the log_dir
+    wandb.config.update({"log_dir": log_dir})
+    
+    record_dir = os.path.join(log_dir, 'record')
+    os.makedirs(record_dir, exist_ok=True)
+
+    log_file = os.path.join(record_dir, 'training_log.log')
+    logging.basicConfig(level=logging.INFO, filename=log_file, force=True)
+
+    logging.info(f'GNN layer: {layer_type}')
+    logging.info(f'Number of epochs: {epochs}')
+    logging.info(f'MLP aggregation: {aggr}')
+    logging.info(f'loss function: {loss_func}')
 
     optimizer = AdamW(mlp.parameters(), lr=lr)
 
-    max_batches = 24
     for epoch in trange(epochs):
         total_loss = 0
         total_samples = 0
@@ -427,11 +453,10 @@ def train_terrains_decoupled(train_dictionary,
                 optimizer.zero_grad()
                 total_loss += loss.detach()
                 normalized_abs_err = globals()['nmae_loss'](pred, lengths)
+
                 wandb.log({'epoch_train_loss': loss, 
                         'epoch_total_loss': total_loss/total_samples,
                         'epoch_normalized_abs_err': normalized_abs_err})
-            if i > max_batches:
-                break
 
     # Compute final train metrics
     final_train_metrics = compute_metrics_decoupled(
@@ -487,7 +512,7 @@ def train_few_cross_terrain_case(train_dictionary,
                                 epochs=100, 
                                 loss_func='mse_loss',
                                 lr =0.001,
-                                log_dir=str(output_dir),
+                                base_log_dir=str(output_dir),
                                 siamese=True,
                                 p=1, 
                                 aggr='sum',
@@ -509,7 +534,6 @@ def train_few_cross_terrain_case(train_dictionary,
     if finetune_from:
         embedding_model_state = torch.load(finetune_from, map_location='cpu')
         embedding_module.load_state_dict(embedding_model_state)
-        log_dir = os.path.join(log_dir, 'finetune/')
     embedding_module.to(torch.double)
     embedding_module.to(device)
     print(embedding_module)    
@@ -525,11 +549,6 @@ def train_few_cross_terrain_case(train_dictionary,
         print(mlp)
     
     optimizer = AdamW(parameters, lr=lr)
-    record_dir = os.path.join(log_dir, 'record/')
-    if not os.path.exists(record_dir):
-        os.makedirs(record_dir)
-    log_file = os.path.join(record_dir, 'training_log.log')
-    logging.basicConfig(level=logging.INFO, filename=log_file)
 
     # Build wandb config with all relevant parameters
     base_config = {
@@ -543,16 +562,19 @@ def train_few_cross_terrain_case(train_dictionary,
         "aggr": aggr,
         "new": new,
         "finetune_from": finetune_from,
-        "log_dir": log_dir,
     }
     # Merge with any additional config passed from training script
     if wandb_config:
         base_config.update(wandb_config)
+        # Extract just filenames for train/test resolution for easier reading
+        base_config['train_resolution'] = os.path.basename(wandb_config['train_data'])
+        base_config['test_resolution'] = os.path.basename(wandb_config['test_data'])
     
     # Add Sparse GT config if using SparseGT layer type
     if layer_type == 'SparseGT' and hasattr(embedding_module, 'get_config_for_wandb'):
         base_config.update(embedding_module.get_config_for_wandb())
     
+    # Initialize wandb first to get run ID
     run = wandb.init(
         project='terrains',
         dir=str(output_dir / 'wandb'),
@@ -560,12 +582,24 @@ def train_few_cross_terrain_case(train_dictionary,
         tags=wandb_tag if wandb_tag else None,
         config=base_config
     )
-
-    if not os.path.exists(record_dir):
-        os.makedirs(record_dir)
+    
+    # Create log directory based on run_name and wandb run ID
+    # Format: {run_name}_{wandb_id} e.g., res04_phase1_abc123xy
+    train_filename = run_name if run_name else 'train'
+    run_dir_name = f"{train_filename}_{run.id}"
+    log_dir = os.path.join(base_log_dir, 'runs', run_dir_name)
+    if finetune_from:
+        log_dir = os.path.join(log_dir, 'finetune')
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # Update wandb config with the log_dir
+    wandb.config.update({"log_dir": log_dir})
+    
+    record_dir = os.path.join(log_dir, 'record')
+    os.makedirs(record_dir, exist_ok=True)
 
     log_file = os.path.join(record_dir, 'training_log.log')
-    logging.basicConfig(level=logging.INFO, filename=log_file)
+    logging.basicConfig(level=logging.INFO, filename=log_file, force=True)
 
     logging.info(f'GNN layer: {layer_type}')
     logging.info(f'Number of epochs: {epochs}')
@@ -573,23 +607,23 @@ def train_few_cross_terrain_case(train_dictionary,
     logging.info(f'Siamese? {siamese}')
     logging.info(f'loss function: {loss_func}')
     print("logging to....", record_dir)
+    
+    global_step = 0
     for epoch in trange(epochs):
-        total_loss = 0
-        total_samples = 0
         for i in range(num_graphs):
             graph_data = train_dictionary['graphs'][i].to(device)
             dataloader = train_dictionary['dataloaders'][i]
-            total_samples = len(dataloader.dataset)
             for batch in dataloader:
                 srcs = batch[0].to(device, non_blocking=True)
                 tars = batch[1].to(device, non_blocking=True)
                 lengths = batch[2].to(device, non_blocking=True)
+                batch_size = len(srcs)
+                
                 if 'MLP' in layer_type:
                     src_embeddings = embedding_module(graph_data.x[srcs])
                     tar_embeddings = embedding_module(graph_data.x[tars])
                 else:
-                    node_embeddings = embedding_module(graph_data.x,graph_data.edge_index,edge_attr = graph_data.edge_attr)
-
+                    node_embeddings = embedding_module(graph_data.x, graph_data.edge_index, edge_attr=graph_data.edge_attr)
                     src_embeddings = node_embeddings[srcs]
                     tar_embeddings = node_embeddings[tars]
                     
@@ -597,18 +631,29 @@ def train_few_cross_terrain_case(train_dictionary,
                     pred = torch.norm(src_embeddings - tar_embeddings, p=p, dim=1)
                 else:
                     pred = mlp(src_embeddings, tar_embeddings, vn_emb=None)
-                    pred=pred.squeeze()
+                    pred = pred.squeeze()
+                
                 loss = globals()[loss_func](pred, lengths)
                 loss.backward()
-
                 optimizer.step()
                 optimizer.zero_grad()
-                total_loss += loss.detach()
-        
-        normalized_abs_err = globals()['nmae_loss'](pred, lengths)
-        wandb.log({'epoch_train_loss': loss, 
-                   'epoch_total_loss': total_loss/total_samples,
-                   'epoch_normalized_abs_err': normalized_abs_err})
+                
+                # Log metrics every batch
+                with torch.no_grad():
+                    train_mse = mse_loss(pred, lengths).item()
+                    train_mae = mae_loss(pred, lengths).item()
+                    train_nmae = nmae_loss(pred, lengths).item()
+                
+                wandb.log({
+                    'train_loss': loss.item(),
+                    'train_mse': train_mse,
+                    'train_mae': train_mae,
+                    'train_nmae': train_nmae,
+                    'epoch': epoch,
+                    'global_step': global_step,
+                }, step=global_step)
+                
+                global_step += 1
 
     # Compute final train metrics
     graph_data = train_dictionary['graphs'][0].to(device)
@@ -626,21 +671,34 @@ def train_few_cross_terrain_case(train_dictionary,
             test_graph_data, device, layer_type, siamese, p, loss_func
         )
     
-    # Log final metrics
+    # Log final metrics (use final_ prefix to distinguish from batch metrics)
     final_metrics = {
-        'train_loss': final_train_metrics['loss'],
-        'train_mse': final_train_metrics['mse'],
-        'train_mae': final_train_metrics['mae'],
-        'train_nmae': final_train_metrics['nmae'],
+        'final_train_loss': final_train_metrics['loss'],
+        'final_train_mse': final_train_metrics['mse'],
+        'final_train_mae': final_train_metrics['mae'],
+        'final_train_nmae': final_train_metrics['nmae'],
     }
     if final_test_metrics is not None:
         final_metrics.update({
-            'test_loss': final_test_metrics['loss'],
-            'test_mse': final_test_metrics['mse'],
-            'test_mae': final_test_metrics['mae'],
-            'test_nmae': final_test_metrics['nmae'],
+            'final_test_loss': final_test_metrics['loss'],
+            'final_test_mse': final_test_metrics['mse'],
+            'final_test_mae': final_test_metrics['mae'],
+            'final_test_nmae': final_test_metrics['nmae'],
         })
-    wandb.log(final_metrics)
+    wandb.log(final_metrics, step=global_step)
+
+    # Save predictions to CSV and log as wandb artifact
+    if final_test_metrics is not None and 'all_preds_df' in final_test_metrics:
+        preds_path = os.path.join(log_dir, 'preds.csv')
+        os.makedirs(os.path.dirname(preds_path), exist_ok=True)
+        final_test_metrics['all_preds_df'].to_csv(preds_path, index=False)
+        logging.info(f'Saved predictions to {preds_path}')
+        
+        # Log as wandb artifact
+        # disable to avoid clutter
+        # artifact = wandb.Artifact(name='predictions', type='predictions')
+        # artifact.add_file(preds_path)
+        # wandb.log_artifact(artifact)
     
     logging.info(f'final training loss: {final_train_metrics["loss"]}')
     if final_test_metrics is not None:
@@ -650,6 +708,7 @@ def train_few_cross_terrain_case(train_dictionary,
     if final_test_metrics is not None:
         print("Final test loss:", final_test_metrics['loss'])
     print("siamese", siamese)
+    os.makedirs(log_dir, exist_ok=True)
     if siamese:
         path = os.path.join(log_dir, 'final_model.pt')
         print("saving model to:", path)
@@ -657,7 +716,6 @@ def train_few_cross_terrain_case(train_dictionary,
         wandb.finish()
         return embedding_module
     else:
-        
         path = os.path.join(log_dir, 'final_model.pt')
         print("saving model to:", path)
         torch.save({'gnn_state_dict':embedding_module.state_dict(), 

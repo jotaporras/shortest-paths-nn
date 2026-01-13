@@ -97,7 +97,7 @@ def main():
                                     lr= args.lr,
                                     loss_func=args.loss,
                                     aggr = aggr, 
-                                    log_dir=log_dir,
+                                    base_log_dir=log_dir,
                                     p = args.p,
                                     siamese=siamese,
                                     finetune_from=finetune_from,
