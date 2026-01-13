@@ -167,3 +167,4 @@ wandb
 data
 models
 wandb-metadata.json
+.vscode
