@@ -47,6 +47,109 @@ wandb.login()
 MSE = nn.MSELoss()
 
 REPO_ROOT = Path(__file__).resolve().parent
+
+
+@torch.no_grad()
+def compute_metrics(embedding_module, mlp, dataloader, graph_data, device, 
+                    layer_type, siamese, p, loss_func):
+    """
+    Compute metrics on a dataset (train or test).
+    
+    Returns a dict with: loss, nmae, mse, mae
+    """
+    embedding_module.eval()
+    if mlp is not None:
+        mlp.eval()
+    
+    total_loss = 0.0
+    total_mse = 0.0
+    total_mae = 0.0
+    total_nmae = 0.0
+    total_samples = 0
+    
+    for batch in dataloader:
+        srcs = batch[0].to(device, non_blocking=True)
+        tars = batch[1].to(device, non_blocking=True)
+        lengths = batch[2].to(device, non_blocking=True)
+        batch_size = len(srcs)
+        
+        if 'MLP' in layer_type:
+            src_embeddings = embedding_module(graph_data.x[srcs])
+            tar_embeddings = embedding_module(graph_data.x[tars])
+        else:
+            node_embeddings = embedding_module(graph_data.x, graph_data.edge_index, 
+                                               edge_attr=graph_data.edge_attr)
+            src_embeddings = node_embeddings[srcs]
+            tar_embeddings = node_embeddings[tars]
+        
+        if siamese:
+            pred = torch.norm(src_embeddings - tar_embeddings, p=p, dim=1)
+        else:
+            pred = mlp(src_embeddings, tar_embeddings, vn_emb=None)
+            pred = pred.squeeze()
+        
+        # Compute metrics
+        loss = globals()[loss_func](pred, lengths)
+        total_loss += loss.item() * batch_size
+        total_mse += mse_loss(pred, lengths).item() * batch_size
+        total_mae += mae_loss(pred, lengths).item() * batch_size
+        total_nmae += nmae_loss(pred, lengths).item() * batch_size
+        total_samples += batch_size
+    
+    embedding_module.train()
+    if mlp is not None:
+        mlp.train()
+    
+    return {
+        'loss': total_loss / total_samples,
+        'mse': total_mse / total_samples,
+        'mae': total_mae / total_samples,
+        'nmae': total_nmae / total_samples,
+    }
+
+
+@torch.no_grad()
+def compute_metrics_decoupled(mlp, embeddings, dataloader, device, loss_func):
+    """
+    Compute metrics on a dataset for decoupled training (pre-computed embeddings).
+    
+    Returns a dict with: loss, nmae, mse, mae
+    """
+    mlp.eval()
+    
+    total_loss = 0.0
+    total_mse = 0.0
+    total_mae = 0.0
+    total_nmae = 0.0
+    total_samples = 0
+    
+    for batch in dataloader:
+        srcs = batch[0]
+        tars = batch[1]
+        embd_srcs = embeddings[srcs].to(device, non_blocking=True)
+        embd_tars = embeddings[tars].to(device, non_blocking=True)
+        lengths = batch[2].to(device, non_blocking=True)
+        batch_size = len(srcs)
+        
+        pred = mlp(embd_srcs, embd_tars, vn_emb=None)
+        pred = pred.squeeze()
+        
+        # Compute metrics
+        loss = globals()[loss_func](pred, lengths)
+        total_loss += loss.item() * batch_size
+        total_mse += mse_loss(pred, lengths).item() * batch_size
+        total_mae += mae_loss(pred, lengths).item() * batch_size
+        total_nmae += nmae_loss(pred, lengths).item() * batch_size
+        total_samples += batch_size
+    
+    mlp.train()
+    
+    return {
+        'loss': total_loss / total_samples,
+        'mse': total_mse / total_samples,
+        'mae': total_mae / total_samples,
+        'nmae': total_nmae / total_samples,
+    }
 output_dir = Path(os.environ.get('TERRAIN_OUTPUT_DIR', REPO_ROOT))
 
 sparse_tensor = ToSparseTensor()
@@ -203,6 +306,7 @@ def train_terrains_decoupled(train_dictionary,
                             run_name=None,
                             wandb_tag=None,
                             wandb_config=None,
+                            test_dictionary=None,
                             **kwargs):
     
     edge_dim=1
@@ -242,6 +346,18 @@ def train_terrains_decoupled(train_dictionary,
             node_embeddings = embedding_module(graph_data.x, graph_data.edge_index, edge_attr = graph_data.edge_attr)
         
         train_dictionary['embeddings'].append(node_embeddings)
+    
+    # Pre-compute test embeddings if test data is provided
+    if test_dictionary is not None:
+        num_test_graphs = len(test_dictionary['graphs'])
+        test_dictionary['embeddings'] = []
+        for i in range(num_test_graphs):
+            graph_data = test_dictionary['graphs'][i]
+            if 'MLP' in layer_type:
+                node_embeddings = embedding_module(graph_data.x)
+            else:
+                node_embeddings = embedding_module(graph_data.x, graph_data.edge_index, edge_attr=graph_data.edge_attr)
+            test_dictionary['embeddings'].append(node_embeddings)
         
     record_dir = os.path.join(prev_model_pth, finetune_dataset_name)
     if not os.path.exists(record_dir):
@@ -277,7 +393,7 @@ def train_terrains_decoupled(train_dictionary,
         base_config.update(embedding_module.get_config_for_wandb())
     
     run = wandb.init(
-        project='terrains',
+        project=os.environ.get('WANDB_PROJECT', 'terrains'),
         dir=str(output_dir / 'wandb'),
         name=run_name,
         tags=wandb_tag if wandb_tag else None,
@@ -286,6 +402,7 @@ def train_terrains_decoupled(train_dictionary,
 
     optimizer = AdamW(mlp.parameters(), lr=lr)
 
+    max_batches = 24
     for epoch in trange(epochs):
         total_loss = 0
         total_samples = 0
@@ -309,18 +426,55 @@ def train_terrains_decoupled(train_dictionary,
                 optimizer.step()
                 optimizer.zero_grad()
                 total_loss += loss.detach()
-            normalized_abs_err = globals()['nmae_loss'](pred, lengths)
-            wandb.log({'train_loss': loss, 
-                    'total_loss': total_loss/total_samples,
-                    'normalized_abs_err': normalized_abs_err})
+                normalized_abs_err = globals()['nmae_loss'](pred, lengths)
+                wandb.log({'epoch_train_loss': loss, 
+                        'epoch_total_loss': total_loss/total_samples,
+                        'epoch_normalized_abs_err': normalized_abs_err})
+            if i > max_batches:
+                break
 
-    logging.info(f'final training loss:{total_loss/total_samples}')
+    # Compute final train metrics
+    final_train_metrics = compute_metrics_decoupled(
+        mlp, train_dictionary['embeddings'][0], train_dictionary['dataloaders'][0],
+        device, loss_func
+    )
+    
+    # Compute final test metrics if test data is provided
+    final_test_metrics = None
+    if test_dictionary is not None:
+        final_test_metrics = compute_metrics_decoupled(
+            mlp, test_dictionary['embeddings'][0], test_dictionary['dataloaders'][0],
+            device, loss_func
+        )
+    
+    # Log final metrics
+    final_metrics = {
+        'train_loss': final_train_metrics['loss'],
+        'train_mse': final_train_metrics['mse'],
+        'train_mae': final_train_metrics['mae'],
+        'train_nmae': final_train_metrics['nmae'],
+    }
+    if final_test_metrics is not None:
+        final_metrics.update({
+            'test_loss': final_test_metrics['loss'],
+            'test_mse': final_test_metrics['mse'],
+            'test_mae': final_test_metrics['mae'],
+            'test_nmae': final_test_metrics['nmae'],
+        })
+    wandb.log(final_metrics)
+    
+    logging.info(f'final training loss: {final_train_metrics["loss"]}')
+    if final_test_metrics is not None:
+        logging.info(f'final test loss: {final_test_metrics["loss"]}')
 
-    print("Final training loss:", total_loss/total_samples)
+    print("Final training loss:", final_train_metrics['loss'])
+    if final_test_metrics is not None:
+        print("Final test loss:", final_test_metrics['loss'])
     path = os.path.join(record_dir, 'final_model.pt')
     print("saving model to:", path)
     torch.save({'gnn_state_dict':embedding_module.state_dict(), 
                 'mlp_state_dict': mlp.state_dict()}, path)
+    wandb.finish()
     return embedding_module, mlp
 
 
@@ -341,7 +495,8 @@ def train_few_cross_terrain_case(train_dictionary,
                                 finetune_from=None,
                                 run_name=None,
                                 wandb_tag=None,
-                                wandb_config=None):
+                                wandb_config=None,
+                                test_dictionary=None):
     torch.manual_seed(0)
     num_graphs = len(train_dictionary['graphs'])
     edge_dim = 1
@@ -451,17 +606,55 @@ def train_few_cross_terrain_case(train_dictionary,
                 total_loss += loss.detach()
         
         normalized_abs_err = globals()['nmae_loss'](pred, lengths)
-        wandb.log({'train_loss': loss, 
-                   'total_loss': total_loss/total_samples,
-                   'normalized_abs_err': normalized_abs_err})
+        wandb.log({'epoch_train_loss': loss, 
+                   'epoch_total_loss': total_loss/total_samples,
+                   'epoch_normalized_abs_err': normalized_abs_err})
 
-    logging.info(f'final training loss:{total_loss/total_samples}')
-    print("Final training loss:", total_loss/total_samples)
+    # Compute final train metrics
+    graph_data = train_dictionary['graphs'][0].to(device)
+    final_train_metrics = compute_metrics(
+        embedding_module, mlp, train_dictionary['dataloaders'][0],
+        graph_data, device, layer_type, siamese, p, loss_func
+    )
+    
+    # Compute final test metrics if test data is provided
+    final_test_metrics = None
+    if test_dictionary is not None:
+        test_graph_data = test_dictionary['graphs'][0].to(device)
+        final_test_metrics = compute_metrics(
+            embedding_module, mlp, test_dictionary['dataloaders'][0],
+            test_graph_data, device, layer_type, siamese, p, loss_func
+        )
+    
+    # Log final metrics
+    final_metrics = {
+        'train_loss': final_train_metrics['loss'],
+        'train_mse': final_train_metrics['mse'],
+        'train_mae': final_train_metrics['mae'],
+        'train_nmae': final_train_metrics['nmae'],
+    }
+    if final_test_metrics is not None:
+        final_metrics.update({
+            'test_loss': final_test_metrics['loss'],
+            'test_mse': final_test_metrics['mse'],
+            'test_mae': final_test_metrics['mae'],
+            'test_nmae': final_test_metrics['nmae'],
+        })
+    wandb.log(final_metrics)
+    
+    logging.info(f'final training loss: {final_train_metrics["loss"]}')
+    if final_test_metrics is not None:
+        logging.info(f'final test loss: {final_test_metrics["loss"]}')
+
+    print("Final training loss:", final_train_metrics['loss'])
+    if final_test_metrics is not None:
+        print("Final test loss:", final_test_metrics['loss'])
     print("siamese", siamese)
     if siamese:
         path = os.path.join(log_dir, 'final_model.pt')
         print("saving model to:", path)
         torch.save(embedding_module.state_dict(), path)
+        wandb.finish()
         return embedding_module
     else:
         
@@ -469,4 +662,5 @@ def train_few_cross_terrain_case(train_dictionary,
         print("saving model to:", path)
         torch.save({'gnn_state_dict':embedding_module.state_dict(), 
                     'mlp_state_dict': mlp.state_dict()}, path)
+        wandb.finish()
         return embedding_module, mlp

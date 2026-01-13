@@ -23,6 +23,9 @@ def nmae_loss(pred, target):
 def mse_loss(pred, target):
     return torch.mean(torch.square(pred - target))
 
+def mae_loss(pred, target):
+    return torch.mean(torch.abs(pred - target))
+
 # MSE for sqrt distance
 def sqrt_distance(pred, target):
     sqrt_distance = torch.sqrt(target)

@@ -100,21 +100,35 @@ def main():
 
             #train_dataset, train_node_features, train_edge_index = debug_dataset(train_data, n=100)
             train_dataset, train_node_features, train_edge_index = npz_to_dataset(train_data)
+            test_dataset, test_node_features, test_edge_index = npz_to_dataset(test_data)
 
             train_edge_attr = None 
+            test_edge_attr = None
             if args.include_edge_attr:
                 train_edge_attr = train_data['distances']
-            print("Number of nodes:", len(train_node_features))
+                test_edge_attr = test_data['distances']
+            print("Number of train nodes:", len(train_node_features))
+            print("Number of test nodes:", len(test_node_features))
             train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+            test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
 
             if train_edge_attr is not None:
                 edge_attr = torch.tensor(train_edge_attr)
                 edge_attr = edge_attr.unsqueeze(-1)
             else:
                 edge_attr = None
+            
+            if test_edge_attr is not None:
+                test_edge_attr_tensor = torch.tensor(test_edge_attr)
+                test_edge_attr_tensor = test_edge_attr_tensor.unsqueeze(-1)
+            else:
+                test_edge_attr_tensor = None
+            
             edge_dim = 1
             graph_data = Data(x=train_node_features, edge_index=train_edge_index, edge_attr=edge_attr)        
+            test_graph_data = Data(x=test_node_features, edge_index=test_edge_index, edge_attr=test_edge_attr_tensor)
             train_dictionary = {'graphs': [graph_data], 'dataloaders': [train_dataloader]}
+            test_dictionary = {'graphs': [test_graph_data], 'dataloaders': [test_dataloader]}
 
             log_dir = format_log_dir(output_dir, 
                                     dataset_name, 
@@ -164,7 +178,8 @@ def main():
                                         new=args.new,
                                         run_name=f"terrain-graph-{args.layer_type}-{res_part}-stage1",
                                         wandb_tag=args.wandb_tag,
-                                        wandb_config=wandb_config)
+                                        wandb_config=wandb_config,
+                                        test_dictionary=test_dictionary)
         
 if __name__=='__main__':
     main()
