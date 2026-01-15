@@ -21,8 +21,8 @@ sparse-gt-rpearl:
       num_hops: 5           # k-hop neighborhood size for attention window (increased from 3)
       rpearl_samples: 30    # number of random samples M for RPEARL
       rpearl_num_layers: 5  # number of GCN layers in RPEARL
-      dropout: 0.3          # dropout probability
-      attn_dropout: 0.1     # attention dropout probability
+      dropout: 0.05          # dropout probability
+      attn_dropout: 0.01     # attention dropout probability
 
   # Final MLP that maps paired embeddings to a distance prediction
   mlp:

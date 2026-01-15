@@ -680,10 +680,10 @@ def train_few_cross_terrain_case(train_dictionary,
     }
     if final_test_metrics is not None:
         final_metrics.update({
-            'final_test_loss': final_test_metrics['loss'],
-            'final_test_mse': final_test_metrics['mse'],
-            'final_test_mae': final_test_metrics['mae'],
-            'final_test_nmae': final_test_metrics['nmae'],
+            'test_loss': final_test_metrics['loss'],
+            'test_mse': final_test_metrics['mse'],
+            'test_mae': final_test_metrics['mae'],
+            'test_nmae': final_test_metrics['nmae'],
         })
     wandb.log(final_metrics, step=global_step)
 
