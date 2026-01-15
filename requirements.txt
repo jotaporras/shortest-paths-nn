@@ -19,3 +19,6 @@ tensorboard
 
 # Configuration
 pyyaml
+
+# Data handling
+pandas
