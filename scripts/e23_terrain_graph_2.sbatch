@@ -7,7 +7,7 @@
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --array=0-38%4
+#SBATCH --array=0-38%5
 
 # e23: TAGConv + SparseGT (k=5) Stage 1 ONLY across res40..res02 (smallest to largest)
 # Test set: generated2/full_test-003.npz
