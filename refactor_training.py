@@ -52,7 +52,7 @@ REPO_ROOT = Path(__file__).resolve().parent
 
 @torch.no_grad()
 def compute_metrics(embedding_module, mlp, dataloader, graph_data, device, 
-                    layer_type, siamese, p, loss_func):
+                    layer_type, siamese, p, loss_func,tqdm_prefix="train"):
     """
     Compute metrics on a dataset (train or test).
     
@@ -69,7 +69,7 @@ def compute_metrics(embedding_module, mlp, dataloader, graph_data, device,
     total_samples = 0
     
     pred_results = []
-    for batch in dataloader:
+    for batch in tqdm(dataloader, desc=f"Compute metrics {tqdm_prefix}"):
         srcs = batch[0].to(device, non_blocking=True)
         tars = batch[1].to(device, non_blocking=True)
         lengths = batch[2].to(device, non_blocking=True)
@@ -130,7 +130,7 @@ def compute_metrics(embedding_module, mlp, dataloader, graph_data, device,
 
 
 @torch.no_grad()
-def compute_metrics_decoupled(mlp, embeddings, dataloader, device, loss_func):
+def compute_metrics_decoupled(mlp, embeddings, dataloader, device, loss_func, tqdm_prefix="train"):
     """
     Compute metrics on a dataset for decoupled training (pre-computed embeddings).
     
@@ -144,7 +144,7 @@ def compute_metrics_decoupled(mlp, embeddings, dataloader, device, loss_func):
     total_nmae = 0.0
     total_samples = 0
     
-    for batch in dataloader:
+    for batch in tqdm(dataloader, desc=f"Compute metrics {tqdm_prefix}"):
         srcs = batch[0]
         tars = batch[1]
         embd_srcs = embeddings[srcs].to(device, non_blocking=True)
@@ -436,7 +436,7 @@ def train_terrains_decoupled(train_dictionary,
             embeddings = train_dictionary['embeddings'][i]
             dataloader = train_dictionary['dataloaders'][i]
             total_samples = len(dataloader.dataset)
-            for batch in dataloader:
+            for batch in tqdm(dataloader, desc=f"Main training loop for graph {i}"):
                 srcs = batch[0]
                 tars = batch[1]
                 embd_srcs = embeddings[srcs].to(device, non_blocking=True)
@@ -461,7 +461,7 @@ def train_terrains_decoupled(train_dictionary,
     # Compute final train metrics
     final_train_metrics = compute_metrics_decoupled(
         mlp, train_dictionary['embeddings'][0], train_dictionary['dataloaders'][0],
-        device, loss_func
+        device, loss_func, tqdm_prefix="train"
     )
     
     # Compute final test metrics if test data is provided
@@ -469,7 +469,7 @@ def train_terrains_decoupled(train_dictionary,
     if test_dictionary is not None:
         final_test_metrics = compute_metrics_decoupled(
             mlp, test_dictionary['embeddings'][0], test_dictionary['dataloaders'][0],
-            device, loss_func
+            device, loss_func, tqdm_prefix="test"
         )
     
     # Log final metrics
@@ -613,7 +613,7 @@ def train_few_cross_terrain_case(train_dictionary,
         for i in range(num_graphs):
             graph_data = train_dictionary['graphs'][i].to(device)
             dataloader = train_dictionary['dataloaders'][i]
-            for batch in dataloader:
+            for batch in tqdm(dataloader, desc=f"Main training loop for graph {i}"):
                 srcs = batch[0].to(device, non_blocking=True)
                 tars = batch[1].to(device, non_blocking=True)
                 lengths = batch[2].to(device, non_blocking=True)
@@ -659,8 +659,8 @@ def train_few_cross_terrain_case(train_dictionary,
     graph_data = train_dictionary['graphs'][0].to(device)
     final_train_metrics = compute_metrics(
         embedding_module, mlp, train_dictionary['dataloaders'][0],
-        graph_data, device, layer_type, siamese, p, loss_func
-    )
+        graph_data, device, layer_type, siamese, p, loss_func, tqdm_prefix="train"
+    )   
     
     # Compute final test metrics if test data is provided
     final_test_metrics = None
@@ -668,7 +668,7 @@ def train_few_cross_terrain_case(train_dictionary,
         test_graph_data = test_dictionary['graphs'][0].to(device)
         final_test_metrics = compute_metrics(
             embedding_module, mlp, test_dictionary['dataloaders'][0],
-            test_graph_data, device, layer_type, siamese, p, loss_func
+            test_graph_data, device, layer_type, siamese, p, loss_func, tqdm_prefix="test"
         )
     
     # Log final metrics (use final_ prefix to distinguish from batch metrics)
