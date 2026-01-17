@@ -23,7 +23,7 @@ PROJECT_DIR=${PROJECT_DIR:-/vast/home/j/jporras/sourcecode/shortest-paths-nn}
 OUTPUT_DIR=${OUTPUT_DIR:-/vast/projects/aribeiro/alelab/jporras/shortest-paths-nn}
 TRIAL=${TRIAL:-1}
 WANDB_TAG=${WANDB_TAG:-e23TG_neurogf_terrain_graph_2}
-TEST_DATA=${TEST_DATA:-generated2/full_test-001.npz}
+TEST_DATA=${TEST_DATA:-generated2/full_test10ksrc-004.npz}
 ENV_NAME=${ENV_NAME:-shortest-paths-nn}
 
 # -----------------------------------------------------------------------------
@@ -51,14 +51,14 @@ TOTAL_TASKS=39
 
 # Resolutions array: res40 to res02 (smallest to largest, i.e., most coarse to finer)
 # Index 0 = res40, index 38 = res02
-RESOLUTIONS=(40 39 38 37 36 35 34 33 32 31 30 29 28 27 26 25 24 23 22 21 20 19 18 17 16 15 14 13 12 11 10 09 08 07 06 05 04 03 02)
+RESOLUTIONS=(40 39 38 37 36 35 34 33 32 31 30 29 28 27 26 25 24 23 22 21 20 19 18 17 16 15 14 13 12 11 10 09 08 07 06 05 04)
 RES=${RESOLUTIONS[$TASK_ID]}
 
 # Batch size: 32 for res01-05 (larger graphs), 256 for res06+ (smaller graphs)
 if [[ "$RES" =~ ^0[1-5]$ ]]; then
-    BATCH_SIZE=32
+    BATCH_SIZE=512
 else
-    BATCH_SIZE=256
+    BATCH_SIZE=1024
 fi
 
 log "========================================"
