@@ -39,11 +39,18 @@ module load anaconda3
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate "$ENV_NAME"
 
+# Data paths - use OUTPUT_DIR for large data files
+RAW_DATA="${OUTPUT_DIR}/data/norway-smallest.txt"
+OUTPUT_DATA_DIR="${OUTPUT_DIR}/data/generated2"
+
+# Ensure output directory exists
+mkdir -p "$OUTPUT_DATA_DIR"
+
 echo "Creating r=003"
 python dataset/generate-test-dataset.py \
     --name norway \
-    --raw-data data/norway-smallest.txt \
-    --filename data/generated2/full_test-003.npz \
+    --raw-data "$RAW_DATA" \
+    --filename "${OUTPUT_DATA_DIR}/full_test-003.npz" \
     --graph-resolution 3 \
     --dataset-size 100000 \
     --triangles  # if you want diagonal edges
@@ -52,8 +59,8 @@ python dataset/generate-test-dataset.py \
 echo "Creating r=004"
 python dataset/generate-test-dataset.py \
     --name norway \
-    --raw-data data/norway-smallest.txt \
-    --filename data/generated2/full_test-004.npz \
+    --raw-data "$RAW_DATA" \
+    --filename "${OUTPUT_DATA_DIR}/full_test-004.npz" \
     --graph-resolution 4 \
     --dataset-size 100000 \
     --triangles  # if you want diagonal edges
@@ -62,8 +69,8 @@ python dataset/generate-test-dataset.py \
 echo "Creating r=008"
 python dataset/generate-test-dataset.py \
     --name norway \
-    --raw-data data/norway-smallest.txt \
-    --filename data/generated2/full_test-008.npz \
+    --raw-data "$RAW_DATA" \
+    --filename "${OUTPUT_DATA_DIR}/full_test-008.npz" \
     --graph-resolution 8 \
     --dataset-size 100000 \
     --triangles  # if you want diagonal edges
