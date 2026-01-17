@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=dev-e23-tg-sgt-test
-#SBATCH --output=/vast/projects/aribeiro/alelab/jporras/shortest-paths-nn/slurm-dev-e23-tg-sgt-test-%A_%a.out
-#SBATCH --time=48:00:00
+#SBATCH --output=/vast/projects/aribeiro/alelab/jporras/shortest-paths-nn/slurm-dev-e23-tg-sgt-test-%A.out
+#SBATCH --time=1:00:00
 #SBATCH --partition=dgx-b200
 #SBATCH --ntasks=1
 #SBATCH --gpus=1
