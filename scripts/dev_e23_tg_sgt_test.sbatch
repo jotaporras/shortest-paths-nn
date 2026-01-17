@@ -51,7 +51,7 @@ TOTAL_TASKS=1
 RESOLUTIONS=(40)
 RES=${RESOLUTIONS[$TASK_ID]}
 
-BATCH_SIZE=256
+BATCH_SIZE=1024
 
 log "========================================"
 log "=== dev e23 Experiment: res${RES} (Stage 1 Only) ==="
@@ -75,7 +75,7 @@ log "================   ========================"
 SPARSEGT_PHASE1_ARGS=(
     --train-data "generated2/res${RES}_phase1.npz"
     --test-data "$TEST_DATA"
-    --epochs 250
+    --epochs 1
     --device cuda
     --batch-size "$BATCH_SIZE"
     --dataset-name "norway/dev_res${RES}"
