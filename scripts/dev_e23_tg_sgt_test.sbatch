@@ -22,7 +22,7 @@ PROJECT_DIR=${PROJECT_DIR:-/vast/home/j/jporras/sourcecode/shortest-paths-nn}
 OUTPUT_DIR=${OUTPUT_DIR:-/vast/projects/aribeiro/alelab/jporras/shortest-paths-nn}
 TRIAL=${TRIAL:-1}
 WANDB_TAG=${WANDB_TAG:-dev_e23TG_tg_sgt_test}
-TEST_DATA=${TEST_DATA:-generated2/full_test-004.npz}
+TEST_DATA=${TEST_DATA:-generated2/full_test10ksrc-004.npz}
 ENV_NAME=${ENV_NAME:-shortest-paths-nn}
 
 # -----------------------------------------------------------------------------

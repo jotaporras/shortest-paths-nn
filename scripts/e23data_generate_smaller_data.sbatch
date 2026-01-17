@@ -8,10 +8,10 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64G
 
-# Generate all test datasets from res002 to res040
+# Generate all test datasets from res002 to res040 with a default source size of 10000 to speed up testing.
 # Usage: sbatch scripts/e23data_generate_smaller_data.sbatch
 # Override defaults: DATASET_SIZE=50000 sbatch scripts/e23data_generate_smaller_data.sbatch
-
+# Outputs: "${OUTPUT_DATA_DIR}/full_test10ksrc-${res_padded}.npz" (source size is hardcoded )
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
@@ -20,7 +20,7 @@ set -euo pipefail
 PROJECT_DIR=${PROJECT_DIR:-/vast/home/j/jporras/sourcecode/shortest-paths-nn}
 OUTPUT_DIR=${OUTPUT_DIR:-/vast/projects/aribeiro/alelab/jporras/shortest-paths-nn}
 ENV_NAME=${ENV_NAME:-shortest-paths-nn}
-DATASET_SIZE=${DATASET_SIZE:-100000}
+DATASET_SIZE=${DATASET_SIZE:-10000}
 
 # -----------------------------------------------------------------------------
 # Environment Setup
@@ -60,7 +60,7 @@ fi
 for res in $(seq 2 40); do
     # Zero-pad resolution to 3 digits (002, 003, ..., 040)
     res_padded=$(printf "%03d" "$res")
-    output_file="${OUTPUT_DATA_DIR}/full_test-${res_padded}.npz"
+    output_file="${OUTPUT_DATA_DIR}/full_test10ksrc-${res_padded}.npz"
     
     # Skip if file already exists
     if [[ -f "$output_file" ]]; then
