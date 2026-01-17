@@ -22,3 +22,12 @@ python dataset/generate-test-dataset.py \
     --graph-resolution 4 \
     --dataset-size 100000 \
     --triangles  # if you want diagonal edges
+
+
+python dataset/generate-test-dataset.py \
+    --name norway \
+    --raw-data data/norway-smallest.txt \
+    --filename data/generated2/full_test-008.npz \
+    --graph-resolution 8 \
+    --dataset-size 100000 \
+    --triangles  # if you want diagonal edges

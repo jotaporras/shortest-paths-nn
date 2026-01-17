@@ -101,7 +101,11 @@ def main():
 
             #train_dataset, train_node_features, train_edge_index = debug_dataset(train_data, n=100)
             train_dataset, train_node_features, train_edge_index = npz_to_dataset(train_data)
-            test_dataset, test_node_features, test_edge_index = npz_to_dataset(test_data)
+            test_dataset_full, test_node_features, test_edge_index = npz_to_dataset(test_data)
+
+            # Split test dataset into validation (0.5%) and test (99.5%)
+            val_dataset, test_dataset = split_dataset_for_validation(test_dataset_full, val_fraction=0.005, seed=42)
+            print(f"Split test data: {len(val_dataset)} validation samples, {len(test_dataset)} test samples")
 
             train_edge_attr = None 
             test_edge_attr = None
@@ -111,6 +115,7 @@ def main():
             print("Number of train nodes:", len(train_node_features))
             print("Number of test nodes:", len(test_node_features))
             train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+            val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False)
             test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
 
             if train_edge_attr is not None:
@@ -129,6 +134,7 @@ def main():
             graph_data = Data(x=train_node_features, edge_index=train_edge_index, edge_attr=edge_attr)        
             test_graph_data = Data(x=test_node_features, edge_index=test_edge_index, edge_attr=test_edge_attr_tensor)
             train_dictionary = {'graphs': [graph_data], 'dataloaders': [train_dataloader]}
+            val_dictionary = {'graphs': [test_graph_data], 'dataloaders': [val_dataloader]}
             test_dictionary = {'graphs': [test_graph_data], 'dataloaders': [test_dataloader]}
 
             log_dir = format_log_dir(output_dir, 
@@ -178,7 +184,8 @@ def main():
                                         run_name=f"terrain-graph-{args.layer_type}-{res_part}-stage1",
                                         wandb_tag=args.wandb_tag,
                                         wandb_config=wandb_config,
-                                        test_dictionary=test_dictionary)
+                                        test_dictionary=test_dictionary,
+                                        val_dictionary=val_dictionary)
         
 if __name__=='__main__':
     main()

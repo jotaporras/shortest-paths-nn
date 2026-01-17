@@ -89,6 +89,7 @@ def main():
     parser.add_argument('--single-terrain-per-model', action='store_true')
     parser.add_argument('--artificial', action='store_true')
     parser.add_argument('--wandb-tag', type=str, nargs='+', default=None)
+    parser.add_argument('--test-data', type=str, default=None, help='Optional test data file for evaluation')
 
     args = parser.parse_args()
 
@@ -165,6 +166,35 @@ def main():
             # Extract resolution from dataset_name (e.g., "norway/res17" -> "res17")
             res_part = dataset_name.split('/')[-1] if '/' in dataset_name else dataset_name
             
+            # Handle test data if provided (for validation and final evaluation)
+            val_dictionary = None
+            test_dictionary = None
+            if args.test_data is not None:
+                test_file = os.path.join(output_dir, 'data', args.test_data) if not Path(args.test_data).is_absolute() else args.test_data
+                test_data = np.load(test_file, allow_pickle=True)
+                test_dataset_full, test_node_features, test_edge_index = npz_to_dataset(test_data)
+                
+                # Split test dataset into validation (0.5%) and test (99.5%)
+                val_dataset, test_dataset = split_dataset_for_validation(test_dataset_full, val_fraction=0.005, seed=42)
+                print(f"Split test data: {len(val_dataset)} validation samples, {len(test_dataset)} test samples")
+                
+                test_edge_attr = None
+                if args.include_edge_attr:
+                    test_edge_attr = test_data['distances']
+                
+                if test_edge_attr is not None:
+                    test_edge_attr_tensor = torch.tensor(test_edge_attr)
+                    test_edge_attr_tensor = test_edge_attr_tensor.unsqueeze(-1)
+                else:
+                    test_edge_attr_tensor = None
+                
+                test_graph_data = Data(x=test_node_features, edge_index=test_edge_index, edge_attr=test_edge_attr_tensor)
+                val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False)
+                test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
+                
+                val_dictionary = {'graphs': [test_graph_data], 'dataloaders': [val_dataloader]}
+                test_dictionary = {'graphs': [test_graph_data], 'dataloaders': [test_dataloader]}
+            
             train_terrains_decoupled(train_dictionary = train_dictionary,
                                     model_config = config, 
                                     layer_type = args.layer_type, 
@@ -179,7 +209,9 @@ def main():
                                     new=args.new,
                                     run_name=f"terrain-graph-{args.layer_type}-{res_part}-stage2",
                                     wandb_tag=args.wandb_tag,
-                                    wandb_config=wandb_config)
+                                    wandb_config=wandb_config,
+                                    test_dictionary=test_dictionary,
+                                    val_dictionary=val_dictionary)
     
 if __name__=='__main__':
     main()

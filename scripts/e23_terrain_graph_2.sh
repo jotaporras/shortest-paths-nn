@@ -14,7 +14,7 @@ PROJECT_DIR=${PROJECT_DIR:-$(pwd)}
 OUTPUT_DIR=${OUTPUT_DIR:-.}
 TRIAL=${TRIAL:-1}
 WANDB_TAG=${WANDB_TAG:-e23TG_neurogf_terrain_graph_2}
-TEST_DATA=${TEST_DATA:-generated2/full_test-003.npz}
+TEST_DATA=${TEST_DATA:-generated2/full_test-004.npz}
 
 # -----------------------------------------------------------------------------
 # Environment Setup
