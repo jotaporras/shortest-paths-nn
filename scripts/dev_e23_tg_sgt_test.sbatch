@@ -7,7 +7,6 @@
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --array=0-38%5
 
 # dev-e23-tg-sgt-test: TAGConv + SparseGT (k=5) Stage 1 ONLY across res40..res02 (smallest to largest)
 # Test set: generated2/full_test-003.npz
@@ -79,7 +78,7 @@ SPARSEGT_PHASE1_ARGS=(
     --epochs 250
     --device cuda
     --batch-size "$BATCH_SIZE"
-    --dataset-name "norway/res${RES}"
+    --dataset-name "norway/dev_res${RES}"
     --config configs/sparse-gt-rpearl-k5.yml
     --siamese 1
     --vn 0
@@ -92,7 +91,7 @@ SPARSEGT_PHASE1_ARGS=(
     --lr 0.0001
     --trial "$TRIAL"
     --new
-    --wandb-tag "$WANDB_TAG" stage1 SparseGT "train-res${RES}" "test-003"
+    --wandb-tag "$WANDB_TAG" stage1 SparseGT "train-dev_res${RES}" "test-004"
 )
 
 log "Command: python train_single_terrain_case.py ${SPARSEGT_PHASE1_ARGS[*]}"
