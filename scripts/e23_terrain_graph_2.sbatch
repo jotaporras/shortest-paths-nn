@@ -37,7 +37,7 @@ ENV_NAME=${ENV_NAME:-shortest-paths-nn}
 
 # SparseGT hyperparameters (override to use custom config instead of sparse-gt-rpearl-k5.yml)
 # Set SGT_CUSTOM=1 to enable custom config generation
-SGT_CUSTOM=${SGT_CUSTOM:-0}
+SGT_CUSTOM=${SGT_CUSTOM:-1}
 SGT_HIDDEN_DIM=${SGT_HIDDEN_DIM:-256}
 SGT_NUM_LAYERS=${SGT_NUM_LAYERS:-4}
 SGT_NUM_HEADS=${SGT_NUM_HEADS:-4}
@@ -93,40 +93,40 @@ log "  Wandb tag: ${WANDB_TAG}"
 log "  Output dir: ${OUTPUT_DIR}"
 
 # =============================================================================
-# TAGConv Training (Phase 1 Only)
+# TAGConv Training (Phase 1 Only) - COMMENTED OUT
 # =============================================================================
 
-log ""
-log "========================================"
-log "=== TAGConv Phase 1: GNN Training ==="
-log "========================================"
+# log ""
+# log "========================================"
+# log "=== TAGConv Phase 1: GNN Training ==="
+# log "========================================"
 
-TAGCONV_PHASE1_ARGS=(
-    --train-data "generated2/res${RES}_phase1.npz"
-    --test-data "$TEST_DATA"
-    --epochs 500
-    --device cuda
-    --batch-size "$BATCH_SIZE"
-    --dataset-name "norway/res${RES}"
-    --config configs/tagconv-k5.yml
-    --siamese 1
-    --vn 0
-    --layer-type TAGConv
-    --aggr 'sum+diff'
-    --p 4
-    --loss mse_loss
-    --finetune 0
-    --include-edge-attr 1
-    --lr 0.0001
-    --trial "$TRIAL"
-    --new
-    --wandb-tag "$WANDB_TAG" stage1 TAGConv "train-res${RES}" "test-003"
-)
+# TAGCONV_PHASE1_ARGS=(
+#     --train-data "generated2/res${RES}_phase1.npz"
+#     --test-data "$TEST_DATA"
+#     --epochs 500
+#     --device cuda
+#     --batch-size "$BATCH_SIZE"
+#     --dataset-name "norway/res${RES}"
+#     --config configs/tagconv-k5.yml
+#     --siamese 1
+#     --vn 0
+#     --layer-type TAGConv
+#     --aggr 'sum+diff'
+#     --p 4
+#     --loss mse_loss
+#     --finetune 0
+#     --include-edge-attr 1
+#     --lr 0.0001
+#     --trial "$TRIAL"
+#     --new
+#     --wandb-tag "$WANDB_TAG" stage1 TAGConv "train-res${RES}" "test-003"
+# )
 
-log "Command: python train_single_terrain_case.py ${TAGCONV_PHASE1_ARGS[*]}"
-python train_single_terrain_case.py "${TAGCONV_PHASE1_ARGS[@]}"
+# log "Command: python train_single_terrain_case.py ${TAGCONV_PHASE1_ARGS[*]}"
+# python train_single_terrain_case.py "${TAGCONV_PHASE1_ARGS[@]}"
 
-log "TAGConv Phase 1 completed for res${RES}"
+# log "TAGConv Phase 1 completed for res${RES}"
 
 # =============================================================================
 # SparseGT Training (Phase 1 Only)
