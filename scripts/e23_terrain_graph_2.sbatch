@@ -13,6 +13,15 @@
 # Test set: generated2/full_test-003.npz
 # Usage: sbatch scripts/e23_terrain_graph_2.sbatch
 # Override defaults: TRIAL=2 WANDB_TAG=my_tag sbatch scripts/e23_terrain_graph_2.sbatch
+#
+# Custom SparseGT config example:
+#   SGT_CUSTOM=1 SGT_NUM_HOPS=7 SGT_NUM_LAYERS=4 SGT_HIDDEN_DIM=128 SGT_DROPOUT=0.01 \
+#   sbatch scripts/e23_terrain_graph_2.sbatch
+#
+# Available SGT_* env vars (only used when SGT_CUSTOM=1):
+#   SGT_HIDDEN_DIM (default: 64), SGT_NUM_LAYERS (default: 3), SGT_NUM_HEADS (default: 4),
+#   SGT_NUM_HOPS (default: 5), SGT_RPEARL_SAMPLES (default: 30), SGT_RPEARL_NUM_LAYERS (default: 5),
+#   SGT_DROPOUT (default: 0.05), SGT_ATTN_DROPOUT (default: 0.01)
 
 set -euo pipefail
 
@@ -25,6 +34,18 @@ TRIAL=${TRIAL:-1}
 WANDB_TAG=${WANDB_TAG:-e23TG_neurogf_terrain_graph_2}
 TEST_DATA=${TEST_DATA:-generated2/full_test10ksrc-004.npz}
 ENV_NAME=${ENV_NAME:-shortest-paths-nn}
+
+# SparseGT hyperparameters (override to use custom config instead of sparse-gt-rpearl-k5.yml)
+# Set SGT_CUSTOM=1 to enable custom config generation
+SGT_CUSTOM=${SGT_CUSTOM:-0}
+SGT_HIDDEN_DIM=${SGT_HIDDEN_DIM:-256}
+SGT_NUM_LAYERS=${SGT_NUM_LAYERS:-4}
+SGT_NUM_HEADS=${SGT_NUM_HEADS:-4}
+SGT_NUM_HOPS=${SGT_NUM_HOPS:-5}
+SGT_RPEARL_SAMPLES=${SGT_RPEARL_SAMPLES:-30}
+SGT_RPEARL_NUM_LAYERS=${SGT_RPEARL_NUM_LAYERS:-5}
+SGT_DROPOUT=${SGT_DROPOUT:-0.005}
+SGT_ATTN_DROPOUT=${SGT_ATTN_DROPOUT:-0.005}
 
 # -----------------------------------------------------------------------------
 # Environment Setup
@@ -116,6 +137,58 @@ log "========================================"
 log "=== SparseGT Phase 1: GNN Training ==="
 log "========================================"
 
+# Determine config file: use custom generated config or default yml
+if [[ "$SGT_CUSTOM" == "1" ]]; then
+    SGT_CONFIG_FILE=$(mktemp --suffix=.yml)
+    trap "rm -f $SGT_CONFIG_FILE" EXIT
+
+    cat > "$SGT_CONFIG_FILE" << EOF
+# Auto-generated SparseGT config for e23_terrain_graph_2
+sparse-gt-rpearl:
+  gnn:
+    constr:
+      input: 3
+      hidden: ${SGT_HIDDEN_DIM}
+      output: 64
+      layers: 3
+    layer_norm: false
+    dropout: true
+    activation: lrelu
+
+    sparse_gt:
+      hidden_dim: ${SGT_HIDDEN_DIM}
+      num_layers: ${SGT_NUM_LAYERS}
+      num_heads: ${SGT_NUM_HEADS}
+      num_hops: ${SGT_NUM_HOPS}
+      rpearl_samples: ${SGT_RPEARL_SAMPLES}
+      rpearl_num_layers: ${SGT_RPEARL_NUM_LAYERS}
+      dropout: ${SGT_DROPOUT}
+      attn_dropout: ${SGT_ATTN_DROPOUT}
+
+  mlp:
+    constr:
+      input: 64
+      hidden: 128
+      output: 1
+      layers: 3
+    layer_norm: false
+    dropout: true
+EOF
+
+    log "Using custom SparseGT config:"
+    log "  hidden_dim: ${SGT_HIDDEN_DIM}"
+    log "  num_layers: ${SGT_NUM_LAYERS}"
+    log "  num_heads: ${SGT_NUM_HEADS}"
+    log "  num_hops: ${SGT_NUM_HOPS}"
+    log "  rpearl_samples: ${SGT_RPEARL_SAMPLES}"
+    log "  rpearl_num_layers: ${SGT_RPEARL_NUM_LAYERS}"
+    log "  dropout: ${SGT_DROPOUT}"
+    log "  attn_dropout: ${SGT_ATTN_DROPOUT}"
+else
+    SGT_CONFIG_FILE="configs/sparse-gt-rpearl-k5.yml"
+    log "Using default SparseGT config: ${SGT_CONFIG_FILE}"
+fi
+
 SPARSEGT_PHASE1_ARGS=(
     --train-data "generated2/res${RES}_phase1.npz"
     --test-data "$TEST_DATA"
@@ -123,7 +196,7 @@ SPARSEGT_PHASE1_ARGS=(
     --device cuda
     --batch-size "$BATCH_SIZE"
     --dataset-name "norway/res${RES}"
-    --config configs/sparse-gt-rpearl-k5.yml
+    --config "$SGT_CONFIG_FILE"
     --siamese 1
     --vn 0
     --layer-type SparseGT
