@@ -93,113 +93,25 @@ log "  Wandb tag: ${WANDB_TAG}"
 log "  Output dir: ${OUTPUT_DIR}"
 
 # =============================================================================
-# TAGConv Training (Phase 1 Only) - COMMENTED OUT
-# =============================================================================
-
-# log ""
-# log "========================================"
-# log "=== TAGConv Phase 1: GNN Training ==="
-# log "========================================"
-
-# TAGCONV_PHASE1_ARGS=(
-#     --train-data "generated2/res${RES}_phase1.npz"
-#     --test-data "$TEST_DATA"
-#     --epochs 500
-#     --device cuda
-#     --batch-size "$BATCH_SIZE"
-#     --dataset-name "norway/res${RES}"
-#     --config configs/tagconv-k5.yml
-#     --siamese 1
-#     --vn 0
-#     --layer-type TAGConv
-#     --aggr 'sum+diff'
-#     --p 4
-#     --loss mse_loss
-#     --finetune 0
-#     --include-edge-attr 1
-#     --lr 0.0001
-#     --trial "$TRIAL"
-#     --new
-#     --wandb-tag "$WANDB_TAG" stage1 TAGConv "train-res${RES}" "test-003"
-# )
-
-# log "Command: python train_single_terrain_case.py ${TAGCONV_PHASE1_ARGS[*]}"
-# python train_single_terrain_case.py "${TAGCONV_PHASE1_ARGS[@]}"
-
-# log "TAGConv Phase 1 completed for res${RES}"
-
-# =============================================================================
-# SparseGT Training (Phase 1 Only)
+# TAGConv Training (Phase 1 Only)
 # =============================================================================
 
 log ""
 log "========================================"
-log "=== SparseGT Phase 1: GNN Training ==="
+log "=== TAGConv Phase 1: GNN Training ==="
 log "========================================"
 
-# Determine config file: use custom generated config or default yml
-if [[ "$SGT_CUSTOM" == "1" ]]; then
-    SGT_CONFIG_FILE=$(mktemp --suffix=.yml)
-    trap "rm -f $SGT_CONFIG_FILE" EXIT
-
-    cat > "$SGT_CONFIG_FILE" << EOF
-# Auto-generated SparseGT config for e23_terrain_graph_2
-sparse-gt-rpearl:
-  gnn:
-    constr:
-      input: 3
-      hidden: ${SGT_HIDDEN_DIM}
-      output: 64
-      layers: 3
-    layer_norm: false
-    dropout: true
-    activation: lrelu
-
-    sparse_gt:
-      hidden_dim: ${SGT_HIDDEN_DIM}
-      num_layers: ${SGT_NUM_LAYERS}
-      num_heads: ${SGT_NUM_HEADS}
-      num_hops: ${SGT_NUM_HOPS}
-      rpearl_samples: ${SGT_RPEARL_SAMPLES}
-      rpearl_num_layers: ${SGT_RPEARL_NUM_LAYERS}
-      dropout: ${SGT_DROPOUT}
-      attn_dropout: ${SGT_ATTN_DROPOUT}
-
-  mlp:
-    constr:
-      input: 64
-      hidden: 128
-      output: 1
-      layers: 3
-    layer_norm: false
-    dropout: true
-EOF
-
-    log "Using custom SparseGT config:"
-    log "  hidden_dim: ${SGT_HIDDEN_DIM}"
-    log "  num_layers: ${SGT_NUM_LAYERS}"
-    log "  num_heads: ${SGT_NUM_HEADS}"
-    log "  num_hops: ${SGT_NUM_HOPS}"
-    log "  rpearl_samples: ${SGT_RPEARL_SAMPLES}"
-    log "  rpearl_num_layers: ${SGT_RPEARL_NUM_LAYERS}"
-    log "  dropout: ${SGT_DROPOUT}"
-    log "  attn_dropout: ${SGT_ATTN_DROPOUT}"
-else
-    SGT_CONFIG_FILE="configs/sparse-gt-rpearl-k5.yml"
-    log "Using default SparseGT config: ${SGT_CONFIG_FILE}"
-fi
-
-SPARSEGT_PHASE1_ARGS=(
+TAGCONV_PHASE1_ARGS=(
     --train-data "generated2/res${RES}_phase1.npz"
     --test-data "$TEST_DATA"
-    --epochs 250
+    --epochs 500
     --device cuda
     --batch-size "$BATCH_SIZE"
     --dataset-name "norway/res${RES}"
-    --config "$SGT_CONFIG_FILE"
+    --config configs/tagconv-k5.yml
     --siamese 1
     --vn 0
-    --layer-type SparseGT
+    --layer-type TAGConv
     --aggr 'sum+diff'
     --p 4
     --loss mse_loss
@@ -208,15 +120,103 @@ SPARSEGT_PHASE1_ARGS=(
     --lr 0.0001
     --trial "$TRIAL"
     --new
-    --wandb-tag "$WANDB_TAG" stage1 SparseGT "train-res${RES}" "test-003"
+    --wandb-tag "$WANDB_TAG" stage1 TAGConv "train-res${RES}" "test-003"
 )
 
-log "Command: python train_single_terrain_case.py ${SPARSEGT_PHASE1_ARGS[*]}"
-python train_single_terrain_case.py "${SPARSEGT_PHASE1_ARGS[@]}"
+log "Command: python train_single_terrain_case.py ${TAGCONV_PHASE1_ARGS[*]}"
+python train_single_terrain_case.py "${TAGCONV_PHASE1_ARGS[@]}"
 
-log "SparseGT Phase 1 completed for res${RES}"
+log "TAGConv Phase 1 completed for res${RES}"
+
+# =============================================================================
+# SparseGT Training (Phase 1 Only) - COMMENTED OUT
+# =============================================================================
+
+# log ""
+# log "========================================"
+# log "=== SparseGT Phase 1: GNN Training ==="
+# log "========================================"
+
+# # Determine config file: use custom generated config or default yml
+# if [[ "$SGT_CUSTOM" == "1" ]]; then
+#     SGT_CONFIG_FILE=$(mktemp --suffix=.yml)
+#     trap "rm -f $SGT_CONFIG_FILE" EXIT
+
+#     cat > "$SGT_CONFIG_FILE" << EOF
+# # Auto-generated SparseGT config for e23_terrain_graph_2
+# sparse-gt-rpearl:
+#   gnn:
+#     constr:
+#       input: 3
+#       hidden: ${SGT_HIDDEN_DIM}
+#       output: 64
+#       layers: 3
+#     layer_norm: false
+#     dropout: true
+#     activation: lrelu
+
+#     sparse_gt:
+#       hidden_dim: ${SGT_HIDDEN_DIM}
+#       num_layers: ${SGT_NUM_LAYERS}
+#       num_heads: ${SGT_NUM_HEADS}
+#       num_hops: ${SGT_NUM_HOPS}
+#       rpearl_samples: ${SGT_RPEARL_SAMPLES}
+#       rpearl_num_layers: ${SGT_RPEARL_NUM_LAYERS}
+#       dropout: ${SGT_DROPOUT}
+#       attn_dropout: ${SGT_ATTN_DROPOUT}
+
+#   mlp:
+#     constr:
+#       input: 64
+#       hidden: 128
+#       output: 1
+#       layers: 3
+#     layer_norm: false
+#     dropout: true
+# EOF
+
+#     log "Using custom SparseGT config:"
+#     log "  hidden_dim: ${SGT_HIDDEN_DIM}"
+#     log "  num_layers: ${SGT_NUM_LAYERS}"
+#     log "  num_heads: ${SGT_NUM_HEADS}"
+#     log "  num_hops: ${SGT_NUM_HOPS}"
+#     log "  rpearl_samples: ${SGT_RPEARL_SAMPLES}"
+#     log "  rpearl_num_layers: ${SGT_RPEARL_NUM_LAYERS}"
+#     log "  dropout: ${SGT_DROPOUT}"
+#     log "  attn_dropout: ${SGT_ATTN_DROPOUT}"
+# else
+#     SGT_CONFIG_FILE="configs/sparse-gt-rpearl-k5.yml"
+#     log "Using default SparseGT config: ${SGT_CONFIG_FILE}"
+# fi
+
+# SPARSEGT_PHASE1_ARGS=(
+#     --train-data "generated2/res${RES}_phase1.npz"
+#     --test-data "$TEST_DATA"
+#     --epochs 250
+#     --device cuda
+#     --batch-size "$BATCH_SIZE"
+#     --dataset-name "norway/res${RES}"
+#     --config "$SGT_CONFIG_FILE"
+#     --siamese 1
+#     --vn 0
+#     --layer-type SparseGT
+#     --aggr 'sum+diff'
+#     --p 4
+#     --loss mse_loss
+#     --finetune 0
+#     --include-edge-attr 1
+#     --lr 0.0001
+#     --trial "$TRIAL"
+#     --new
+#     --wandb-tag "$WANDB_TAG" stage1 SparseGT "train-res${RES}" "test-003"
+# )
+
+# log "Command: python train_single_terrain_case.py ${SPARSEGT_PHASE1_ARGS[*]}"
+# python train_single_terrain_case.py "${SPARSEGT_PHASE1_ARGS[@]}"
+
+# log "SparseGT Phase 1 completed for res${RES}"
 
 log ""
 log "========================================"
-log "=== Completed res${RES} (TAGConv + SparseGT, Stage 1 only) ==="
+log "=== Completed res${RES} (TAGConv, Stage 1 only) ==="
 log "========================================"
