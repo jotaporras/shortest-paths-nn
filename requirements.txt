@@ -22,3 +22,7 @@ pyyaml
 
 # Data handling
 pandas
+seaborn
+
+# Point sampler
+ripser
