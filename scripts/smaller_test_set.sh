@@ -7,13 +7,13 @@
 #     --dataset-size 100000 \
 #     --triangles  # if you want diagonal edges
 
-python dataset/generate-test-dataset.py \
-    --name norway \
-    --raw-data data/norway-smallest.txt \
-    --filename data/generated2/full_test-003.npz \
-    --graph-resolution 3 \
-    --dataset-size 100000 \
-    --triangles  # if you want diagonal edges
+# python dataset/generate-test-dataset.py \
+#     --name norway \
+#     --raw-data data/norway-smallest.txt \
+#     --filename data/generated2/full_test-003.npz \
+#     --graph-resolution 3 \
+#     --dataset-size 100000 \
+#     --triangles  # if you want diagonal edges
 
 python dataset/generate-test-dataset.py \
     --name norway \
@@ -24,10 +24,10 @@ python dataset/generate-test-dataset.py \
     --triangles  # if you want diagonal edges
 
 
-python dataset/generate-test-dataset.py \
-    --name norway \
-    --raw-data data/norway-smallest.txt \
-    --filename data/generated2/full_test-008.npz \
-    --graph-resolution 8 \
-    --dataset-size 100000 \
-    --triangles  # if you want diagonal edges
+# python dataset/generate-test-dataset.py \
+#     --name norway \
+#     --raw-data data/norway-smallest.txt \
+#     --filename data/generated2/full_test-008.npz \
+#     --graph-resolution 8 \
+#     --dataset-size 100000 \
+#     --triangles  # if you want diagonal edges

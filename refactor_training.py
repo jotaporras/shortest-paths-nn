@@ -77,6 +77,13 @@ def compute_metrics(embedding_module, mlp, dataloader, graph_data, device,
     if mlp is not None:
         mlp.eval()
     
+    # For GNN models, compute all node embeddings once instead of per-batch
+    precomputed_embeddings = None
+    if 'MLP' not in layer_type:
+        precomputed_embeddings = embedding_module(
+            graph_data.x, graph_data.edge_index, edge_attr=graph_data.edge_attr
+        )
+    
     total_loss = 0.0
     total_mse = 0.0
     total_mae = 0.0
@@ -94,10 +101,8 @@ def compute_metrics(embedding_module, mlp, dataloader, graph_data, device,
             src_embeddings = embedding_module(graph_data.x[srcs])
             tar_embeddings = embedding_module(graph_data.x[tars])
         else:
-            node_embeddings = embedding_module(graph_data.x, graph_data.edge_index, 
-                                               edge_attr=graph_data.edge_attr)
-            src_embeddings = node_embeddings[srcs]
-            tar_embeddings = node_embeddings[tars]
+            src_embeddings = precomputed_embeddings[srcs]
+            tar_embeddings = precomputed_embeddings[tars]
         
         if siamese:
             pred = torch.norm(src_embeddings - tar_embeddings, p=p, dim=1)
@@ -242,6 +247,24 @@ class SingleGraphShortestPathDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.sources[idx], self.targets[idx], self.lengths[idx]
+
+def materialize_single_graph_batch(dataset, device):
+    if isinstance(dataset, Subset):
+        base_dataset = dataset.dataset
+        indices = torch.as_tensor(dataset.indices, dtype=torch.long)
+        sources = base_dataset.sources[indices]
+        targets = base_dataset.targets[indices]
+        lengths = base_dataset.lengths[indices]
+    else:
+        sources = dataset.sources
+        targets = dataset.targets
+        lengths = dataset.lengths
+
+    return (
+        sources.to(device=device, non_blocking=True).long(),
+        targets.to(device=device, non_blocking=True).long(),
+        lengths.to(device=device, non_blocking=True),
+    )
 
 class TerrainPatchesDataset(Data):
     def __inc__(self, key, value, *args, **kwargs):
@@ -611,6 +634,7 @@ def train_few_cross_terrain_case(train_dictionary,
                                 run_name=None,
                                 wandb_tag=None,
                                 wandb_config=None,
+                                single_graph_full_batch=False,
                                 test_dictionary=None,
                                 val_dictionary=None):
     torch.manual_seed(0)
@@ -653,6 +677,7 @@ def train_few_cross_terrain_case(train_dictionary,
         "aggr": aggr,
         "new": new,
         "finetune_from": finetune_from,
+        "single_graph_full_batch": single_graph_full_batch,
     }
     # Merge with any additional config passed from training script
     if wandb_config:
@@ -667,7 +692,7 @@ def train_few_cross_terrain_case(train_dictionary,
     
     # Initialize wandb first to get run ID
     run = wandb.init(
-        project='terrains',
+        project=os.environ.get('WANDB_PROJECT', 'terrains'),
         dir=str(output_dir / 'wandb'),
         name=run_name,
         tags=wandb_tag if wandb_tag else None,
@@ -698,53 +723,114 @@ def train_few_cross_terrain_case(train_dictionary,
     logging.info(f'Siamese? {siamese}')
     logging.info(f'loss function: {loss_func}')
     print("logging to....", record_dir)
+
+    use_single_graph_full_batch = (
+        single_graph_full_batch
+        and siamese
+        and num_graphs == 1
+        and 'MLP' not in layer_type
+    )
+    if single_graph_full_batch and not use_single_graph_full_batch:
+        msg = (
+            "single_graph_full_batch requested, but it only applies to "
+            "single-graph, non-MLP siamese training. Falling back to batch mode."
+        )
+        print(msg)
+        logging.info(msg)
+
+    full_batch_graph = None
+    full_batch_srcs = None
+    full_batch_tars = None
+    full_batch_lengths = None
+    if use_single_graph_full_batch:
+        full_batch_graph = train_dictionary['graphs'][0].to(device)
+        full_batch_srcs, full_batch_tars, full_batch_lengths = materialize_single_graph_batch(
+            train_dictionary['dataloaders'][0].dataset,
+            device,
+        )
+        msg = (
+            f"Using full-batch single-graph siamese training with "
+            f"{len(full_batch_srcs)} source-target pairs."
+        )
+        print(msg)
+        logging.info(msg)
     
     global_step = 0
     for epoch in trange(epochs):
-        for i in range(num_graphs):
-            graph_data = train_dictionary['graphs'][i].to(device)
-            dataloader = train_dictionary['dataloaders'][i]
-            for batch in tqdm(dataloader, desc=f"Main training loop for graph {i}"):
-                srcs = batch[0].to(device, non_blocking=True)
-                tars = batch[1].to(device, non_blocking=True)
-                lengths = batch[2].to(device, non_blocking=True)
-                batch_size = len(srcs)
-                
-                if 'MLP' in layer_type:
-                    src_embeddings = embedding_module(graph_data.x[srcs])
-                    tar_embeddings = embedding_module(graph_data.x[tars])
-                else:
-                    node_embeddings = embedding_module(graph_data.x, graph_data.edge_index, edge_attr=graph_data.edge_attr)
-                    src_embeddings = node_embeddings[srcs]
-                    tar_embeddings = node_embeddings[tars]
+        if use_single_graph_full_batch:
+            optimizer.zero_grad()
+            node_embeddings = embedding_module(
+                full_batch_graph.x,
+                full_batch_graph.edge_index,
+                edge_attr=full_batch_graph.edge_attr,
+            )
+            src_embeddings = node_embeddings[full_batch_srcs]
+            tar_embeddings = node_embeddings[full_batch_tars]
+            pred = torch.norm(src_embeddings - tar_embeddings, p=p, dim=1)
+            loss = globals()[loss_func](pred, full_batch_lengths)
+            loss.backward()
+            optimizer.step()
+
+            with torch.no_grad():
+                train_mse = mse_loss(pred, full_batch_lengths).item()
+                train_mae = mae_loss(pred, full_batch_lengths).item()
+                train_nmae = nmae_loss(pred, full_batch_lengths).item()
+
+            wandb.log({
+                'train_loss': loss.item(),
+                'train_mse': train_mse,
+                'train_mae': train_mae,
+                'train_nmae': train_nmae,
+                'epoch': epoch,
+                'global_step': global_step,
+            }, step=global_step)
+
+            global_step += 1
+        else:
+            for i in range(num_graphs):
+                graph_data = train_dictionary['graphs'][i].to(device)
+                dataloader = train_dictionary['dataloaders'][i]
+                for batch in tqdm(dataloader, desc=f"Main training loop for graph {i}"):
+                    srcs = batch[0].to(device, non_blocking=True)
+                    tars = batch[1].to(device, non_blocking=True)
+                    lengths = batch[2].to(device, non_blocking=True)
+                    batch_size = len(srcs)
                     
-                if siamese:
-                    pred = torch.norm(src_embeddings - tar_embeddings, p=p, dim=1)
-                else:
-                    pred = mlp(src_embeddings, tar_embeddings, vn_emb=None)
-                    pred = pred.squeeze()
-                
-                loss = globals()[loss_func](pred, lengths)
-                loss.backward()
-                optimizer.step()
-                optimizer.zero_grad()
-                
-                # Log metrics every batch
-                with torch.no_grad():
-                    train_mse = mse_loss(pred, lengths).item()
-                    train_mae = mae_loss(pred, lengths).item()
-                    train_nmae = nmae_loss(pred, lengths).item()
-                
-                wandb.log({
-                    'train_loss': loss.item(),
-                    'train_mse': train_mse,
-                    'train_mae': train_mae,
-                    'train_nmae': train_nmae,
-                    'epoch': epoch,
-                    'global_step': global_step,
-                }, step=global_step)
-                
-                global_step += 1
+                    if 'MLP' in layer_type:
+                        src_embeddings = embedding_module(graph_data.x[srcs])
+                        tar_embeddings = embedding_module(graph_data.x[tars])
+                    else:
+                        node_embeddings = embedding_module(graph_data.x, graph_data.edge_index, edge_attr=graph_data.edge_attr)
+                        src_embeddings = node_embeddings[srcs]
+                        tar_embeddings = node_embeddings[tars]
+                        
+                    if siamese:
+                        pred = torch.norm(src_embeddings - tar_embeddings, p=p, dim=1)
+                    else:
+                        pred = mlp(src_embeddings, tar_embeddings, vn_emb=None)
+                        pred = pred.squeeze()
+                    
+                    loss = globals()[loss_func](pred, lengths)
+                    loss.backward()
+                    optimizer.step()
+                    optimizer.zero_grad()
+                    
+                    # Log metrics every batch
+                    with torch.no_grad():
+                        train_mse = mse_loss(pred, lengths).item()
+                        train_mae = mae_loss(pred, lengths).item()
+                        train_nmae = nmae_loss(pred, lengths).item()
+                    
+                    wandb.log({
+                        'train_loss': loss.item(),
+                        'train_mse': train_mse,
+                        'train_mae': train_mae,
+                        'train_nmae': train_nmae,
+                        'epoch': epoch,
+                        'global_step': global_step,
+                    }, step=global_step)
+                    
+                    global_step += 1
         
         # Compute validation metrics after each epoch
         if val_dictionary is not None:

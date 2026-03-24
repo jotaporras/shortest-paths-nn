@@ -60,6 +60,7 @@ def main():
     parser.add_argument('--new', action='store_true')
     parser.add_argument('--finetune-from', type=str, default='none')
     parser.add_argument('--artificial', action='store_true')
+    parser.add_argument('--single-graph-full-batch', action='store_true')
     parser.add_argument('--wandb-tag', type=str, nargs='+', default=None)
 
     args = parser.parse_args()
@@ -184,6 +185,7 @@ def main():
                                         run_name=f"terrain-graph-{args.layer_type}-{res_part}-stage1",
                                         wandb_tag=args.wandb_tag,
                                         wandb_config=wandb_config,
+                                        single_graph_full_batch=args.single_graph_full_batch,
                                         test_dictionary=test_dictionary,
                                         val_dictionary=val_dictionary)
         

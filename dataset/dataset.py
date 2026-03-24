@@ -10,7 +10,8 @@ import itertools
 
 import argparse
 import os
-from point_sampler import * 
+from point_sampler import *
+from functools import partial
 
 DATASET_INFO = {'norway': [10, False], 
                 'phil': [3, True], 
@@ -333,6 +334,27 @@ def construct_dataset(G,
                                random_srcs))
         print("Number of unique sources:", len(np.unique(src_nodes)))
         src_sampling_fn_pairs = [(src_nodes, distance_based)]
+    elif sampling_method == 'proximity-variance':
+        node_features = np.array(node_features)
+        alt_var = compute_altitude_variance(node_features, rows, cols)
+        src_probs = alt_var / (alt_var.sum() + 1e-12)
+        src_nodes = np.random.choice(len(node_features), size=num_srcs, replace=False, p=src_probs)
+        sampling_fn = partial(proximity_variance_sampling, altitude_variance=alt_var)
+        src_sampling_fn_pairs = [(src_nodes, sampling_fn)]
+    elif sampling_method == 'hybrid':
+        node_features = np.array(node_features)
+        alt_var = compute_altitude_variance(node_features, rows, cols)
+        n_uniform_src = num_srcs // 2
+        n_elev_src = num_srcs - n_uniform_src
+        uniform_srcs = np.random.choice(len(node_features), size=n_uniform_src, replace=False)
+        src_probs = alt_var / (alt_var.sum() + 1e-12)
+        remaining = np.setdiff1d(np.arange(len(node_features)), uniform_srcs)
+        remaining_probs = src_probs[remaining]
+        remaining_probs = remaining_probs / remaining_probs.sum()
+        elev_srcs = np.random.choice(remaining, size=n_elev_src, replace=False, p=remaining_probs)
+        src_nodes = np.concatenate([uniform_srcs, elev_srcs])
+        sampling_fn = partial(hybrid_sampling, altitude_variance=alt_var)
+        src_sampling_fn_pairs = [(src_nodes, sampling_fn)]
     else:
         raise NotImplementedError("please choose between 'single-source-random', \
                                                          'critical-point-source', \
