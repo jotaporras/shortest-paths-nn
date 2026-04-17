@@ -1,43 +1,17 @@
 #!/usr/bin/env bash
 # Usage:
-#   CUDA_VISIBLE_DEVICES=0 bash scripts/e27TR_philly_hybrid_sampling.sh even
-#   CUDA_VISIBLE_DEVICES=1 bash scripts/e27TR_philly_hybrid_sampling.sh odd
+#   CUDA_VISIBLE_DEVICES=0 bash scripts/e28TR_philly_hybrid_sampling_full_test.sh
 set -euo pipefail
 
-SPLIT=${1:-}
-if [ "$SPLIT" != "even" ] && [ "$SPLIT" != "odd" ]; then
-  echo "Usage: CUDA_VISIBLE_DEVICES=X bash scripts/e27TR_philly_hybrid_sampling.sh <even|odd>"
-  exit 1
-fi
-
-if [ "$SPLIT" = "even" ]; then
-  RESOLUTIONS=(20 18 16 14 12 10 8 6 4 2)
-else
-  RESOLUTIONS=(19 17 15 13 11 9 7 5 3 1)
-fi
+RESOLUTIONS=(20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1)
 
 PROJECT_ROOT="/home/teresa/shortest-paths-nn"
-PYTHON_BIN="/home/shared/manifold-transformers/bin/python"
+PYTHON_BIN="/home/teresa/miniconda3/envs/manifold-transformers/bin/python"
 RAW_DATA="/home/teresa/terrain-data/data/flat-phil-data-1.txt"
-TEST_FILE_ABS="data/generated2/philly_test_res04.npz"
-TEST_FILE_REL="generated2/philly_test_res04.npz"
+TEST_FILE_ABS="data/generated2/philly_test_1k_sources.npz"
+TEST_FILE_REL="generated2/philly_test_1k_sources.npz"
 
 cd "$PROJECT_ROOT"
-
-# Generate Philadelphia test dataset at res=4 (once, before training loop)
-if [ ! -f "$TEST_FILE_ABS" ]; then
-  echo "Generating Philadelphia test dataset: $TEST_FILE_ABS"
-  mkdir -p "$(dirname "$TEST_FILE_ABS")"
-  "$PYTHON_BIN" dataset/dataset.py \
-    --name phil \
-    --raw-data "$RAW_DATA" \
-    --filename "$TEST_FILE_ABS" \
-    --graph-resolution 4 \
-    --dataset-size 50000 \
-    --num-sources 100 \
-    --sampling-technique single-source-random \
-    --edge-weight
-fi
 
 for RES in "${RESOLUTIONS[@]}"; do
   RES_PADDED=$(printf "%02d" "$RES")
@@ -46,7 +20,7 @@ for RES in "${RESOLUTIONS[@]}"; do
   DATASET_NAME="philadelphia/res${RES_PADDED}"
 
   echo "=================================================="
-  echo "Resolution ${RES_PADDED}  |  split=${SPLIT}"
+  echo "Resolution ${RES_PADDED}"
   echo "Train file: ${TRAIN_FILE_ABS}"
   echo "Test file:  ${TEST_FILE_ABS}"
   echo "=================================================="
