@@ -110,12 +110,13 @@ class RandomGNNPositionalEncodings(nn.Module):
     """
 
     def __init__(
-        self, pe_hidden_channels, pe_num_layers, d_model, num_samples=30, dropout=0.1
+        self, pe_hidden_channels, pe_num_layers, d_model, num_samples=30, dropout=0.1,
+        k: int = 3,
     ):
         super().__init__()
-        # Create a GCN that takes 1-dimensional random features
         self.pe_gcn = GCN(
-            1, pe_hidden_channels, pe_num_layers, skip_connection=True, dropout=dropout
+            1, pe_hidden_channels, pe_num_layers, skip_connection=True, dropout=dropout,
+            k=k,
         )
         # Add a final projection to ensure output is d_model dimensions
         self.output_projection = nn.Linear(pe_hidden_channels, d_model)
@@ -149,6 +150,43 @@ class RandomGNNPositionalEncodings(nn.Module):
         pooled_pe = P.mean(dim=-1)
         pooled_pe = self.batch_norm(pooled_pe)
         return pooled_pe
+
+
+class DataGNNPositionalEncodings(nn.Module):
+    """
+    Graph positional encodings using the graph's true node features,
+    propagated through a GCN.
+
+    Args:
+        in_features (int): Number of input node features
+        pe_hidden_channels (int): Hidden dimension for the GCN
+        pe_num_layers (int): Number of layers in the GCN
+        d_model (int): Output dimension
+        dropout (float): Dropout probability
+        conv_type (str): Convolution type for the GCN (currently only "tag")
+    """
+
+    def __init__(
+        self, in_features, pe_hidden_channels, pe_num_layers, d_model, dropout=0.1,
+        conv_type="tag", k: int = 3,
+    ):
+        super().__init__()
+        self.pe_gcn = GCN(
+            in_features,
+            pe_hidden_channels,
+            pe_num_layers,
+            skip_connection=True,
+            dropout=dropout,
+            k=k,
+        )
+        self.output_projection = nn.Linear(pe_hidden_channels, d_model)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, data):
+        pe = self.pe_gcn(data)
+        pe = self.dropout(pe)
+        pe = self.output_projection(pe)
+        return pe
 
 
 # =============================================================================
@@ -442,7 +480,7 @@ class KHopGTModel(nn.Module):
 
 class SparseGTWithRPEARL(nn.Module):
     """
-    Combined Sparse GT backbone with RPEARL positional encodings.
+    Combined Sparse GT backbone with positional encodings.
     
     Follows the simple interface expected by terrain graph training:
     forward(x, edge_index, edge_attr=None, batch=None) -> node_embeddings
@@ -454,10 +492,13 @@ class SparseGTWithRPEARL(nn.Module):
         num_layers (int): Number of sparse attention layers
         num_heads (int): Number of attention heads
         num_hops (int): K-hop neighborhood size for attention window
-        rpearl_samples (int): Number of random samples M for RPEARL
-        rpearl_num_layers (int): Number of GCN layers in RPEARL
+        rpearl_samples (int): Number of random samples M for RPEARL (only used when embedding_mode="random")
+        rpearl_num_layers (int): Number of GCN layers in positional encoding
         dropout (float): Dropout probability
         attn_dropout (float): Attention dropout probability
+        embedding_mode (str): "random" for RPEARL random encodings,
+                              "data" for data-driven GCN encodings
+        pe_k (int): TAGConv polynomial order K for the PE GCN
     """
 
     def __init__(
@@ -472,6 +513,8 @@ class SparseGTWithRPEARL(nn.Module):
         rpearl_num_layers: int = 3,
         dropout: float = 0.3,
         attn_dropout: float = 0.1,
+        embedding_mode: str = "random",
+        pe_k: int = 3,
     ):
         super().__init__()
         
@@ -485,18 +528,33 @@ class SparseGTWithRPEARL(nn.Module):
         self.rpearl_num_layers = rpearl_num_layers
         self.dropout_p = dropout
         self.attn_dropout_p = attn_dropout
+        self.embedding_mode = embedding_mode
+        self.pe_k = pe_k
         
         # Input projection
         self.input_projection = nn.Linear(input_dim, hidden_dim)
         
-        # RPEARL positional encodings
-        self.positional_encoding = RandomGNNPositionalEncodings(
-            pe_hidden_channels=hidden_dim,
-            pe_num_layers=rpearl_num_layers,
-            d_model=hidden_dim,
-            num_samples=rpearl_samples,
-            dropout=dropout,
-        )
+        # Positional encodings
+        if embedding_mode == "random":
+            self.positional_encoding = RandomGNNPositionalEncodings(
+                pe_hidden_channels=hidden_dim,
+                pe_num_layers=rpearl_num_layers,
+                d_model=hidden_dim,
+                num_samples=rpearl_samples,
+                dropout=dropout,
+                k=pe_k,
+            )
+        elif embedding_mode == "data":
+            self.positional_encoding = DataGNNPositionalEncodings(
+                in_features=input_dim,
+                pe_hidden_channels=hidden_dim,
+                pe_num_layers=rpearl_num_layers,
+                d_model=hidden_dim,
+                dropout=dropout,
+                k=pe_k,
+            )
+        else:
+            raise ValueError(f"Unknown embedding_mode '{embedding_mode}'. Use 'random' or 'data'.")
         
         # Sparse GT backbone
         self.backbone = KHopGTModel(
@@ -569,5 +627,7 @@ class SparseGTWithRPEARL(nn.Module):
             "sparse_gt_rpearl_num_layers": self.rpearl_num_layers,
             "sparse_gt_dropout": self.dropout_p,
             "sparse_gt_attn_dropout": self.attn_dropout_p,
+            "sparse_gt_embedding_mode": self.embedding_mode,
+            "sparse_gt_pe_k": self.pe_k,
         }
 

@@ -62,6 +62,15 @@ def main():
     parser.add_argument('--artificial', action='store_true')
     parser.add_argument('--single-graph-full-batch', action='store_true')
     parser.add_argument('--wandb-tag', type=str, nargs='+', default=None)
+    parser.add_argument('--resolution', type=int, default=None,
+                        help='Graph resolution to log directly to wandb/config')
+    parser.add_argument('--early-stopping-patience', type=int, default=None,
+                        help='Stop training if val_mse does not improve for this many epochs.')
+    parser.add_argument('--run-name', type=str, default=None,
+                        help='Custom wandb run name. Defaults to terrain-graph-{layer_type}-{resolution}-stage1')
+    parser.add_argument('--rpearl-embedding-mode', type=str, default=None,
+                        choices=['random', 'data'],
+                        help='Positional encoding mode for SparseGT (overrides config)')
 
     args = parser.parse_args()
     siamese = True if args.siamese == 1 else False
@@ -149,6 +158,10 @@ def main():
                                     args.p,
                                     args.trial)
             config=model_configs[modelname]
+
+            if args.rpearl_embedding_mode is not None:
+                config.setdefault('gnn', {}).setdefault('sparse_gt', {})['embedding_mode'] = args.rpearl_embedding_mode
+
             print(modelname, config)
 
             # Build wandb config with all command-line arguments
@@ -165,9 +178,15 @@ def main():
                 "artificial": args.artificial,
                 "model_config_name": modelname,
             }
+            if args.rpearl_embedding_mode is not None:
+                wandb_config["rpearl_embedding_mode"] = args.rpearl_embedding_mode
+            if args.resolution is not None:
+                wandb_config["resolution"] = args.resolution
             
             # Extract resolution from dataset_name (e.g., "norway/res17" -> "res17")
-            res_part = dataset_name.split('/')[-1] if '/' in dataset_name else dataset_name
+            resolution_label = f"res{args.resolution:02d}" if args.resolution is not None else (
+                dataset_name.split('/')[-1] if '/' in dataset_name else dataset_name
+            )
             
             refactor_training.train_few_cross_terrain_case(train_dictionary=train_dictionary,
                                         model_config = config,
@@ -182,12 +201,13 @@ def main():
                                         siamese=siamese,
                                         finetune_from=finetune_from,
                                         new=args.new,
-                                        run_name=f"terrain-graph-{args.layer_type}-{res_part}-stage1",
+                                        run_name=args.run_name or f"terrain-graph-{args.layer_type}-{resolution_label}-stage1",
                                         wandb_tag=args.wandb_tag,
                                         wandb_config=wandb_config,
                                         single_graph_full_batch=args.single_graph_full_batch,
                                         test_dictionary=test_dictionary,
-                                        val_dictionary=val_dictionary)
+                                        val_dictionary=val_dictionary,
+                                        early_stopping_patience=args.early_stopping_patience)
         
 if __name__=='__main__':
     main()

@@ -88,6 +88,9 @@ def compute_metrics(embedding_module, mlp, dataloader, graph_data, device,
     total_mse = 0.0
     total_mae = 0.0
     total_nmae = 0.0
+    total_acc_1pct = 0
+    total_acc_2pct = 0
+    total_acc_5pct = 0
     total_samples = 0
     
     pred_results = []
@@ -135,6 +138,9 @@ def compute_metrics(embedding_module, mlp, dataloader, graph_data, device,
         pred_mses = torch.square(pred - lengths)
         pred_maes = torch.abs(pred - lengths)
         pred_nmaes = torch.abs(pred - lengths) / lengths
+        total_acc_1pct += (pred_nmaes < 0.01).sum().item()
+        total_acc_2pct += (pred_nmaes < 0.02).sum().item()
+        total_acc_5pct += (pred_nmaes < 0.05).sum().item()
         # Generate predictions 
         result = (srcs.cpu().numpy(), 
                   tars.cpu().numpy(), 
@@ -159,6 +165,9 @@ def compute_metrics(embedding_module, mlp, dataloader, graph_data, device,
         'mse': total_mse / total_samples,
         'mae': total_mae / total_samples,
         'nmae': total_nmae / total_samples,
+        'acc_1pct': total_acc_1pct / total_samples,
+        'acc_2pct': total_acc_2pct / total_samples,
+        'acc_5pct': total_acc_5pct / total_samples,
         'all_preds_df': all_preds_df,
     }
 
@@ -188,6 +197,9 @@ def compute_metrics_decoupled(mlp, embeddings, dataloader, device, loss_func,
     total_mse = 0.0
     total_mae = 0.0
     total_nmae = 0.0
+    total_acc_1pct = 0
+    total_acc_2pct = 0
+    total_acc_5pct = 0
     total_samples = 0
     
     for batch in tqdm(dataloader, desc=f"Compute metrics {tqdm_prefix}"):
@@ -207,6 +219,11 @@ def compute_metrics_decoupled(mlp, embeddings, dataloader, device, loss_func,
         batch_mse = mse_loss(pred, lengths).item()
         batch_mae = mae_loss(pred, lengths).item()
         batch_nmae = nmae_loss(pred, lengths).item()
+        
+        pred_nmaes = torch.abs(pred - lengths) / lengths
+        total_acc_1pct += (pred_nmaes < 0.01).sum().item()
+        total_acc_2pct += (pred_nmaes < 0.02).sum().item()
+        total_acc_5pct += (pred_nmaes < 0.05).sum().item()
         
         total_loss += batch_loss * batch_size
         total_mse += batch_mse * batch_size
@@ -230,6 +247,9 @@ def compute_metrics_decoupled(mlp, embeddings, dataloader, device, loss_func,
         'mse': total_mse / total_samples,
         'mae': total_mae / total_samples,
         'nmae': total_nmae / total_samples,
+        'acc_1pct': total_acc_1pct / total_samples,
+        'acc_2pct': total_acc_2pct / total_samples,
+        'acc_5pct': total_acc_5pct / total_samples,
     }
 output_dir = Path(os.environ.get('TERRAIN_OUTPUT_DIR', REPO_ROOT))
 
@@ -378,6 +398,8 @@ def configure_embedding_module(model_config,
             rpearl_num_layers=sparse_gt_config.get('rpearl_num_layers', 3),
             dropout=sparse_gt_config.get('dropout', 0.3),
             attn_dropout=sparse_gt_config.get('attn_dropout', 0.1),
+            embedding_mode=sparse_gt_config.get('embedding_mode', 'random'),
+            pe_k=sparse_gt_config.get('pe_k', 3),
         )
     else:
         embedding_module = GNNModel(layer_type=layer_type, 
@@ -570,6 +592,9 @@ def train_terrains_decoupled(train_dictionary,
                 'val_mse': val_metrics['mse'],
                 'val_mae': val_metrics['mae'],
                 'val_nmae': val_metrics['nmae'],
+                'val_acc_1pct': val_metrics['acc_1pct'],
+                'val_acc_2pct': val_metrics['acc_2pct'],
+                'val_acc_5pct': val_metrics['acc_5pct'],
                 'epoch': epoch,
             })
 
@@ -594,6 +619,9 @@ def train_terrains_decoupled(train_dictionary,
         'train_mse': final_train_metrics['mse'],
         'train_mae': final_train_metrics['mae'],
         'train_nmae': final_train_metrics['nmae'],
+        'train_acc_1pct': final_train_metrics['acc_1pct'],
+        'train_acc_2pct': final_train_metrics['acc_2pct'],
+        'train_acc_5pct': final_train_metrics['acc_5pct'],
     }
     if final_test_metrics is not None:
         final_metrics.update({
@@ -601,6 +629,9 @@ def train_terrains_decoupled(train_dictionary,
             'test_mse': final_test_metrics['mse'],
             'test_mae': final_test_metrics['mae'],
             'test_nmae': final_test_metrics['nmae'],
+            'test_acc_1pct': final_test_metrics['acc_1pct'],
+            'test_acc_2pct': final_test_metrics['acc_2pct'],
+            'test_acc_5pct': final_test_metrics['acc_5pct'],
         })
         logging.info(f'final test loss: {final_test_metrics["loss"]}')
         print("Final test loss:", final_test_metrics['loss'])
@@ -636,7 +667,8 @@ def train_few_cross_terrain_case(train_dictionary,
                                 wandb_config=None,
                                 single_graph_full_batch=False,
                                 test_dictionary=None,
-                                val_dictionary=None):
+                                val_dictionary=None,
+                                early_stopping_patience=None):
     torch.manual_seed(0)
     num_graphs = len(train_dictionary['graphs'])
     edge_dim = 1
@@ -755,6 +787,10 @@ def train_few_cross_terrain_case(train_dictionary,
         print(msg)
         logging.info(msg)
     
+    best_val_mae = float('inf')
+    best_model_state = None
+    epochs_without_improvement = 0
+
     global_step = 0
     for epoch in trange(epochs):
         if use_single_graph_full_batch:
@@ -840,13 +876,38 @@ def train_few_cross_terrain_case(train_dictionary,
                 val_graph_data, device, layer_type, siamese, p, loss_func, 
                 tqdm_prefix="val"
             )
+            cur_val_mae = val_metrics['mae']
+            if cur_val_mae < best_val_mae:
+                best_val_mae = cur_val_mae
+                epochs_without_improvement = 0
+                best_model_state = {
+                    'embedding': copy.deepcopy(embedding_module.state_dict()),
+                    'mlp': copy.deepcopy(mlp.state_dict()) if mlp is not None else None,
+                }
+            else:
+                epochs_without_improvement += 1
             wandb.log({
                 'val_loss': val_metrics['loss'],
                 'val_mse': val_metrics['mse'],
                 'val_mae': val_metrics['mae'],
                 'val_nmae': val_metrics['nmae'],
+                'val_acc_1pct': val_metrics['acc_1pct'],
+                'val_acc_2pct': val_metrics['acc_2pct'],
+                'val_acc_5pct': val_metrics['acc_5pct'],
+                'best_val_mae': best_val_mae,
                 'epoch': epoch,
             }, step=global_step)
+
+            if early_stopping_patience is not None and epochs_without_improvement >= early_stopping_patience:
+                print(f"Early stopping at epoch {epoch} (no improvement for {early_stopping_patience} epochs)")
+                break
+
+    # Restore best model for final evaluation
+    if best_model_state is not None:
+        embedding_module.load_state_dict(best_model_state['embedding'])
+        if mlp is not None and best_model_state['mlp'] is not None:
+            mlp.load_state_dict(best_model_state['mlp'])
+        print(f"Restored best model (val_mae={best_val_mae:.6f}) for final evaluation")
 
     # Compute final train metrics
     graph_data = train_dictionary['graphs'][0].to(device)
@@ -871,6 +932,9 @@ def train_few_cross_terrain_case(train_dictionary,
         'final_train_mse': final_train_metrics['mse'],
         'final_train_mae': final_train_metrics['mae'],
         'final_train_nmae': final_train_metrics['nmae'],
+        'final_train_acc_1pct': final_train_metrics['acc_1pct'],
+        'final_train_acc_2pct': final_train_metrics['acc_2pct'],
+        'final_train_acc_5pct': final_train_metrics['acc_5pct'],
     }
     if final_test_metrics is not None:
         final_metrics.update({
@@ -878,6 +942,9 @@ def train_few_cross_terrain_case(train_dictionary,
             'test_mse': final_test_metrics['mse'],
             'test_mae': final_test_metrics['mae'],
             'test_nmae': final_test_metrics['nmae'],
+            'test_acc_1pct': final_test_metrics['acc_1pct'],
+            'test_acc_2pct': final_test_metrics['acc_2pct'],
+            'test_acc_5pct': final_test_metrics['acc_5pct'],
         })
         # Save predictions to CSV
         preds_path = os.path.join(log_dir, 'preds.csv')
@@ -888,6 +955,10 @@ def train_few_cross_terrain_case(train_dictionary,
         print("Final test loss:", final_test_metrics['loss'])
     
     wandb.log(final_metrics, step=global_step)
+    for k, v in final_metrics.items():
+        wandb.run.summary[k] = v
+    wandb.run.summary['p'] = p
+    wandb.run.summary['best_val_mae'] = best_val_mae
     logging.info(f'final training loss: {final_train_metrics["loss"]}')
     print("Final training loss:", final_train_metrics['loss'])
     print("siamese", siamese)
