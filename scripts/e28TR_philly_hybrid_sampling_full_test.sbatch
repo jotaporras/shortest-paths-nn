@@ -6,7 +6,7 @@
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=14
 #SBATCH --mem=256G
-#SBATCH --array=0-19
+#SBATCH --array=0-59
 
 set -euo pipefail
 
@@ -46,105 +46,116 @@ fi
 TEST_FILE_ABS="$DATA_DIR/generated2/philly_test_1k_sources.npz"
 TEST_FILE_REL="generated2/philly_test_1k_sources.npz"
 
+# ── Array index → (resolution, model) ─────────────────────────────
+# array_id = res_idx * 3 + model_idx
+#   model_idx: 0 = TAGConv, 1 = SparseGT-Random, 2 = SparseGT-Data
 RESOLUTIONS=(20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1)
+MODELS=(tagconv sparsegt_random sparsegt_data)
 
-for RES in "${RESOLUTIONS[@]}"; do
-  RES_PADDED=$(printf "%02d" "$RES")
-  TRAIN_FILE_ABS="$DATA_DIR/philly_res${RES_PADDED}_hybrid.npz"
-  TRAIN_FILE_REL="philly_res${RES_PADDED}_hybrid.npz"
-  DATASET_NAME="philadelphia/res${RES_PADDED}"
+TASK_ID=${SLURM_ARRAY_TASK_ID:?SLURM_ARRAY_TASK_ID is not set}
+RES_IDX=$(( TASK_ID / ${#MODELS[@]} ))
+MODEL_IDX=$(( TASK_ID % ${#MODELS[@]} ))
 
-  echo "=================================================="
-  echo "Resolution ${RES_PADDED}"
-  echo "Train file: ${TRAIN_FILE_ABS}"
-  echo "Test file:  ${TEST_FILE_ABS}"
-  echo "=================================================="
+if [ "$RES_IDX" -ge "${#RESOLUTIONS[@]}" ]; then
+  echo "ERROR: TASK_ID $TASK_ID out of range (max $(( ${#RESOLUTIONS[@]} * ${#MODELS[@]} - 1 )))" >&2
+  exit 1
+fi
 
-  if [ ! -f "$TRAIN_FILE_ABS" ]; then
-    echo "ERROR: Missing training data: $TRAIN_FILE_ABS" >&2
+RES=${RESOLUTIONS[$RES_IDX]}
+MODEL=${MODELS[$MODEL_IDX]}
+RES_PADDED=$(printf "%02d" "$RES")
+TRAIN_FILE_ABS="$DATA_DIR/philly_res${RES_PADDED}_hybrid.npz"
+TRAIN_FILE_REL="philly_res${RES_PADDED}_hybrid.npz"
+DATASET_NAME="philadelphia/res${RES_PADDED}"
+
+echo "=================================================="
+echo "TASK_ID=${TASK_ID}  RES=${RES_PADDED}  MODEL=${MODEL}"
+echo "Train file: ${TRAIN_FILE_ABS}"
+echo "Test file:  ${TEST_FILE_ABS}"
+echo "=================================================="
+
+if [ ! -f "$TRAIN_FILE_ABS" ]; then
+  echo "ERROR: Missing training data: $TRAIN_FILE_ABS" >&2
+  exit 1
+fi
+
+case "$MODEL" in
+  tagconv)
+    python train_single_terrain_case.py \
+      --train-data "$TRAIN_FILE_REL" \
+      --test-data "$TEST_FILE_REL" \
+      --epochs 100 \
+      --resolution "$RES" \
+      --device cuda \
+      --batch-size 32 \
+      --dataset-name "$DATASET_NAME" \
+      --config configs/tagconv-k5.yml \
+      --siamese 1 \
+      --vn 0 \
+      --layer-type TAGConv \
+      --aggr 'sum+diff' \
+      --p 4 \
+      --loss mse_loss \
+      --finetune 0 \
+      --include-edge-attr 1 \
+      --lr 0.0001 \
+      --trial 1 \
+      --new \
+      --single-graph-full-batch \
+      --wandb-tag "$EXPERIMENT_TAG"
+    ;;
+  sparsegt_random)
+    python train_single_terrain_case.py \
+      --train-data "$TRAIN_FILE_REL" \
+      --test-data "$TEST_FILE_REL" \
+      --epochs 100 \
+      --resolution "$RES" \
+      --device cuda \
+      --batch-size 32 \
+      --dataset-name "$DATASET_NAME" \
+      --config configs/sparse-gt-rpearl-philly.yml \
+      --rpearl-embedding-mode random \
+      --siamese 1 \
+      --vn 0 \
+      --layer-type SparseGT \
+      --aggr 'sum+diff' \
+      --p 4 \
+      --loss mse_loss \
+      --finetune 0 \
+      --include-edge-attr 1 \
+      --lr 0.01 \
+      --trial 1 \
+      --new \
+      --single-graph-full-batch \
+      --wandb-tag "$EXPERIMENT_TAG"
+    ;;
+  sparsegt_data)
+    python train_single_terrain_case.py \
+      --train-data "$TRAIN_FILE_REL" \
+      --test-data "$TEST_FILE_REL" \
+      --epochs 100 \
+      --resolution "$RES" \
+      --device cuda \
+      --batch-size 32 \
+      --dataset-name "$DATASET_NAME" \
+      --config configs/sparse-gt-rpearl-philly.yml \
+      --rpearl-embedding-mode data \
+      --siamese 1 \
+      --vn 0 \
+      --layer-type SparseGT \
+      --aggr 'sum+diff' \
+      --p 4 \
+      --loss mse_loss \
+      --finetune 0 \
+      --include-edge-attr 1 \
+      --lr 0.01 \
+      --trial 1 \
+      --new \
+      --single-graph-full-batch \
+      --wandb-tag "$EXPERIMENT_TAG"
+    ;;
+  *)
+    echo "ERROR: Unknown model $MODEL" >&2
     exit 1
-  fi
-
-  echo "=================================================="
-  echo "Training TAGConv for resolution ${RES}"
-  echo "=================================================="
-
-  python train_single_terrain_case.py \
-    --train-data "$TRAIN_FILE_REL" \
-    --test-data "$TEST_FILE_REL" \
-    --epochs 100 \
-    --resolution "$RES" \
-    --device cuda \
-    --batch-size 32 \
-    --dataset-name "$DATASET_NAME" \
-    --config configs/tagconv-k5.yml \
-    --siamese 1 \
-    --vn 0 \
-    --layer-type TAGConv \
-    --aggr 'sum+diff' \
-    --p 4 \
-    --loss mse_loss \
-    --finetune 0 \
-    --include-edge-attr 1 \
-    --lr 0.0001 \
-    --trial 1 \
-    --new \
-    --single-graph-full-batch \
-    --wandb-tag "$EXPERIMENT_TAG"
-
-  echo "=================================================="
-  echo "Training SparseGT-Random for resolution ${RES}"
-  echo "=================================================="
-
-  python train_single_terrain_case.py \
-    --train-data "$TRAIN_FILE_REL" \
-    --test-data "$TEST_FILE_REL" \
-    --epochs 100 \
-    --resolution "$RES" \
-    --device cuda \
-    --batch-size 32 \
-    --dataset-name "$DATASET_NAME" \
-    --config configs/sparse-gt-rpearl-philly.yml \
-    --rpearl-embedding-mode random \
-    --siamese 1 \
-    --vn 0 \
-    --layer-type SparseGT \
-    --aggr 'sum+diff' \
-    --p 4 \
-    --loss mse_loss \
-    --finetune 0 \
-    --include-edge-attr 1 \
-    --lr 0.01 \
-    --trial 1 \
-    --new \
-    --single-graph-full-batch \
-    --wandb-tag "$EXPERIMENT_TAG"
-
-  echo "=================================================="
-  echo "Training SparseGT-Data for resolution ${RES}"
-  echo "=================================================="
-
-  python train_single_terrain_case.py \
-    --train-data "$TRAIN_FILE_REL" \
-    --test-data "$TEST_FILE_REL" \
-    --epochs 100 \
-    --resolution "$RES" \
-    --device cuda \
-    --batch-size 32 \
-    --dataset-name "$DATASET_NAME" \
-    --config configs/sparse-gt-rpearl-philly.yml \
-    --rpearl-embedding-mode data \
-    --siamese 1 \
-    --vn 0 \
-    --layer-type SparseGT \
-    --aggr 'sum+diff' \
-    --p 4 \
-    --loss mse_loss \
-    --finetune 0 \
-    --include-edge-attr 1 \
-    --lr 0.01 \
-    --trial 1 \
-    --new \
-    --single-graph-full-batch \
-    --wandb-tag "$EXPERIMENT_TAG"
-done
+    ;;
+esac
