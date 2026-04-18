@@ -1,23 +1,37 @@
 #!/bin/bash
 #SBATCH --job-name=e28TR_philly_hybrid_sampling_full_test
-#SBATCH --output=/vast/projects/aribeiro/alelab/jporras/manifold-transformers/slurm-%A_%a.out
+#SBATCH --output=/vast/projects/aribeiro/alelab/jporras/shortest-paths-nn/slurm-%A_%a.out
 #SBATCH --time=55:00:00
 #SBATCH --partition=b200-mig45
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=14
 #SBATCH --mem=256G
 #SBATCH --array=0-19
+
 set -euo pipefail
 
-# ── Cluster-specific paths (edit these) ───────────────────────────
-CONDA_ENV="manifold-transformers"       # conda env name
-PROJECT_ROOT="$HOME/shortest-paths-nn"
+# ── Configurable defaults ─────────────────────────────────────────
+PROJECT=${PROJECT:-shortest-paths-nn}
+ENTITY=${ENTITY:-alelab}
+EXPERIMENT_TAG=${EXPERIMENT_TAG:-e28TR_philly_hybrid_sampling_full_test}
+ENV_NAME=${ENV_NAME:-/vast/projects/aribeiro/alelab/jporras/envs/shortest-paths-nn}
+OUTPUT_BASE=${OUTPUT_BASE:-/vast/projects/aribeiro/alelab/jporras/shortest-paths-nn}
+PROJECT_ROOT=${PROJECT_ROOT:-$HOME/sourcecode/shortest-paths-nn}
+
+mkdir -p "${OUTPUT_BASE}"
+
+# ── Environment ───────────────────────────────────────────────────
+module load anaconda3
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate "$ENV_NAME"
+
+cd "$PROJECT_ROOT"
+mkdir -p slurm_logs
+
+export WANDB_PROJECT=terrains
 
 # ── Data staging ──────────────────────────────────────────────────
-# Option A (default): read data directly from the shared filesystem.
-# Option B: copy to node-local scratch for faster I/O.
-#   Set USE_LOCAL_SCRATCH=1 and make sure $TMPDIR or $SLURM_TMPDIR exists.
-USE_LOCAL_SCRATCH=0
+USE_LOCAL_SCRATCH=${USE_LOCAL_SCRATCH:-0}
 
 if [ "$USE_LOCAL_SCRATCH" -eq 1 ]; then
   LOCAL_DATA="${SLURM_TMPDIR:-/tmp/slurm_${SLURM_JOB_ID}}/data"
@@ -28,15 +42,6 @@ if [ "$USE_LOCAL_SCRATCH" -eq 1 ]; then
 else
   DATA_DIR="$PROJECT_ROOT/data"
 fi
-
-# ── Environment ───────────────────────────────────────────────────
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate "$CONDA_ENV"
-cd "$PROJECT_ROOT"
-
-mkdir -p slurm_logs
-
-export WANDB_PROJECT=terrains
 
 TEST_FILE_ABS="$DATA_DIR/generated2/philly_test_1k_sources.npz"
 TEST_FILE_REL="generated2/philly_test_1k_sources.npz"
@@ -85,7 +90,7 @@ for RES in "${RESOLUTIONS[@]}"; do
     --trial 1 \
     --new \
     --single-graph-full-batch \
-    --wandb-tag e28TR_philly_hybrid_sampling_full_test
+    --wandb-tag "$EXPERIMENT_TAG"
 
   echo "=================================================="
   echo "Training SparseGT-Random for resolution ${RES}"
@@ -113,7 +118,7 @@ for RES in "${RESOLUTIONS[@]}"; do
     --trial 1 \
     --new \
     --single-graph-full-batch \
-    --wandb-tag e28TR_philly_hybrid_sampling_full_test
+    --wandb-tag "$EXPERIMENT_TAG"
 
   echo "=================================================="
   echo "Training SparseGT-Data for resolution ${RES}"
@@ -141,5 +146,5 @@ for RES in "${RESOLUTIONS[@]}"; do
     --trial 1 \
     --new \
     --single-graph-full-batch \
-    --wandb-tag e28TR_philly_hybrid_sampling_full_test
+    --wandb-tag "$EXPERIMENT_TAG"
 done
