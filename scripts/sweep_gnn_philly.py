@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 """
-Wandb sweep agent script for SparseGT with data embedding on Philadelphia res=4.
+Wandb sweep agent script for TAGConv GNN on Philadelphia res=4.
 
 Usage:
     # 1. Create the sweep (once):
-    wandb sweep configs/sweep-sparse-gt-data-philly.yml
+    wandb sweep configs/sweep-gnn-philly.yml
 
     # 2. Launch agent(s) — wandb agent calls this script directly:
     CUDA_VISIBLE_DEVICES=0 wandb agent <SWEEP_ID>
@@ -32,39 +32,28 @@ from refactor_training import (
 
 ENTITY = "alelab"
 PROJECT = "manifold-transformers-dev"
-WANDB_TAG = "sweep_sgt_data_philly"
+WANDB_TAG = "sweep_gnn_philly"
 
-TRAIN_FILE = PROJECT_ROOT / "data" / "philly_res10_hybrid.npz"
+TRAIN_FILE = PROJECT_ROOT / "data" / "philly_res04_hybrid.npz"
 TEST_FILE = PROJECT_ROOT / "data" / "generated2" / "philly_test_res04.npz"
-DATASET_NAME = "philadelphia/res10"
-RESOLUTION = 10
+DATASET_NAME = "philadelphia/res04"
+RESOLUTION = 4
 
 
 def build_model_config(cfg):
     """Construct the nested model config dict from flat wandb.config."""
     return {
-        "sparse-gt-rpearl": {
+        "tagconv-k3": {
             "gnn": {
                 "constr": {
                     "input": 3,
                     "hidden": cfg["hidden_dim"],
                     "output": cfg["hidden_dim"],
-                    "layers": 3,
+                    "layers": cfg["num_layers"],
                 },
                 "layer_norm": False,
                 "dropout": True,
                 "activation": "lrelu",
-                "sparse_gt": {
-                    "hidden_dim": cfg["hidden_dim"],
-                    "num_layers": cfg["num_layers"],
-                    "num_heads": cfg["num_heads"],
-                    "num_hops": cfg["num_hops"],
-                    "rpearl_num_layers": cfg["rpearl_num_layers"],
-                    "dropout": cfg["dropout"],
-                    "attn_dropout": cfg["attn_dropout"],
-                    "embedding_mode": "data",
-                    "pe_k": cfg["pe_k"],
-                },
             },
             "mlp": {
                 "constr": {
@@ -85,7 +74,7 @@ def train():
     cfg = dict(wandb.config)
 
     model_config_full = build_model_config(cfg)
-    model_name = "sparse-gt-rpearl"
+    model_name = "tagconv-k3"
     model_config = model_config_full[model_name]
 
     train_data = np.load(str(TRAIN_FILE), allow_pickle=True)
@@ -126,7 +115,7 @@ def train():
         False,      # vn
         "sum+diff",
         "mse_loss",
-        "SparseGT",
+        "TAGConv",
         cfg.get("p", 4),
         run.id,
     )
@@ -144,7 +133,7 @@ def train():
     refactor_training.train_few_cross_terrain_case(
         train_dictionary=train_dictionary,
         model_config=model_config,
-        layer_type="SparseGT",
+        layer_type="TAGConv",
         device="cuda",
         epochs=cfg["epochs"],
         lr=cfg["lr"],
@@ -154,13 +143,12 @@ def train():
         p=cfg.get("p", 4),
         siamese=True,
         new=True,
-        run_name=f"sweep-SparseGT-data-res{RESOLUTION:02d}",
+        run_name=f"sweep-TAGConv-res{RESOLUTION:02d}",
         wandb_tag=[WANDB_TAG],
         wandb_config=wandb_config,
         single_graph_full_batch=True,
         test_dictionary=test_dictionary,
         val_dictionary=val_dictionary,
-        early_stopping_patience=30,
     )
 
     wandb.finish()

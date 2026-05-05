@@ -1,0 +1,23 @@
+# TAGConv configuration tuned for Philadelphia terrain graphs
+# Best hyperparameters from sweep: hidden_dim=32, num_layers=2, lr=0.008
+# Usage: --config configs/tagconv-philly.yml --layer-type TAGConv --lr 0.008
+
+tagconv-philly:
+  gnn:
+    constr:
+      input: 3
+      hidden: 64
+      output: 64
+      layers: 3
+    layer_norm: false
+    dropout: true
+    activation: lrelu
+
+  mlp:
+    constr:
+      input: 32
+      hidden: 128
+      output: 1
+      layers: 3
+    layer_norm: false
+    dropout: true

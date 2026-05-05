@@ -129,13 +129,13 @@ def main():
             test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
 
             if train_edge_attr is not None:
-                edge_attr = torch.tensor(train_edge_attr)
+                edge_attr = torch.tensor(train_edge_attr, dtype=torch.float)
                 edge_attr = edge_attr.unsqueeze(-1)
             else:
                 edge_attr = None
             
             if test_edge_attr is not None:
-                test_edge_attr_tensor = torch.tensor(test_edge_attr)
+                test_edge_attr_tensor = torch.tensor(test_edge_attr, dtype=torch.float)
                 test_edge_attr_tensor = test_edge_attr_tensor.unsqueeze(-1)
             else:
                 test_edge_attr_tensor = None

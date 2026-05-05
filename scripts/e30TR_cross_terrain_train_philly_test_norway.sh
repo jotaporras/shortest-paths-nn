@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Usage:
-#   CUDA_VISIBLE_DEVICES=0 bash scripts/e28TR_philly_hybrid_sampling_full_test.sh --split even
-#   CUDA_VISIBLE_DEVICES=1 bash scripts/e28TR_philly_hybrid_sampling_full_test.sh --split odd
+#   CUDA_VISIBLE_DEVICES=0 bash scripts/e30TR_cross_terrain_train_philly_test_norway.sh --split even
+#   CUDA_VISIBLE_DEVICES=1 bash scripts/e30TR_cross_terrain_train_philly_test_norway.sh --split odd
 set -euo pipefail
 
 SPLIT=""
@@ -33,8 +33,8 @@ echo "Running resolutions: ${RESOLUTIONS[*]}"
 PROJECT_ROOT="/home/teresa/shortest-paths-nn"
 PYTHON_BIN="/home/shared/manifold-transformers/bin/python"
 RAW_DATA="/home/teresa/terrain-data/data/flat-phil-data-1.txt"
-TEST_FILE_ABS="data/generated2/philly_test_res04.npz"
-TEST_FILE_REL="generated2/philly_test_res04.npz"
+TEST_FILE_ABS="data/generated2/full_test-004.npz"
+TEST_FILE_REL="generated2/full_test-004.npz"
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
@@ -66,8 +66,35 @@ for RES in "${RESOLUTIONS[@]}"; do
     echo "Dataset already exists, skipping generation."
   fi
 
+  # echo "=================================================="
+  # echo "Training TAGConv for resolution ${RES}"
+  # echo "=================================================="
+
+  # WANDB_PROJECT=terrains "$PYTHON_BIN" train_single_terrain_case.py \
+  #   --train-data "$TRAIN_FILE_REL" \
+  #   --test-data "$TEST_FILE_REL" \
+  #   --epochs 100 \
+  #   --resolution "$RES" \
+  #   --device cuda \
+  #   --batch-size 32 \
+  #   --dataset-name "$DATASET_NAME" \
+  #   --config configs/tagconv-philly.yml \
+  #   --siamese 1 \
+  #   --vn 0 \
+  #   --layer-type TAGConv \
+  #   --aggr 'sum+diff' \
+  #   --p 4 \
+  #   --loss mse_loss \
+  #   --finetune 0 \
+  #   --include-edge-attr 1 \
+  #   --lr 0.008 \
+  #   --trial 1 \
+  #   --new \
+  #   --single-graph-full-batch \
+  #   --wandb-tag e30TR_cross_terrain_train_philly_test_norway
+
   echo "=================================================="
-  echo "Training TAGConv for resolution ${RES}"
+  echo "Training SparseGT-Random for resolution ${RES}"
   echo "=================================================="
 
   WANDB_PROJECT=terrains "$PYTHON_BIN" train_single_terrain_case.py \
@@ -78,10 +105,11 @@ for RES in "${RESOLUTIONS[@]}"; do
     --device cuda \
     --batch-size 32 \
     --dataset-name "$DATASET_NAME" \
-    --config configs/tagconv-philly.yml \
+    --config configs/sparse-gt-random-philly.yml \
+    --rpearl-embedding-mode random \
     --siamese 1 \
     --vn 0 \
-    --layer-type TAGConv \
+    --layer-type SparseGT \
     --aggr 'sum+diff' \
     --p 4 \
     --loss mse_loss \
@@ -91,61 +119,33 @@ for RES in "${RESOLUTIONS[@]}"; do
     --trial 1 \
     --new \
     --single-graph-full-batch \
-    --wandb-tag e28TR_philly_hybrid_sampling_full_test
+    --wandb-tag e30TR_cross_terrain_train_philly_test_norway
 
-#   echo "=================================================="
-#   echo "Training SparseGT-Random for resolution ${RES}"
-#   echo "=================================================="
+  # echo "=================================================="
+  # echo "Training SparseGT-Data for resolution ${RES}"
+  # echo "=================================================="
 
-#   WANDB_PROJECT=terrains "$PYTHON_BIN" train_single_terrain_case.py \
-#     --train-data "$TRAIN_FILE_REL" \
-#     --test-data "$TEST_FILE_REL" \
-#     --epochs 100 \
-#     --resolution "$RES" \
-#     --device cuda \
-#     --batch-size 32 \
-#     --dataset-name "$DATASET_NAME" \
-#     --config configs/sparse-gt-random-philly.yml \
-#     --rpearl-embedding-mode random \
-#     --siamese 1 \
-#     --vn 0 \
-#     --layer-type SparseGT \
-#     --aggr 'sum+diff' \
-#     --p 4 \
-#     --loss mse_loss \
-#     --finetune 0 \
-#     --include-edge-attr 1 \
-#     --lr 0.008 \
-#     --trial 1 \
-#     --new \
-#     --single-graph-full-batch \
-#     --wandb-tag e28TR_philly_hybrid_sampling_full_test
-
-#   echo "=================================================="
-#   echo "Training SparseGT-Data for resolution ${RES}"
-#   echo "=================================================="
-
-#   WANDB_PROJECT=terrains "$PYTHON_BIN" train_single_terrain_case.py \
-#     --train-data "$TRAIN_FILE_REL" \
-#     --test-data "$TEST_FILE_REL" \
-#     --epochs 100 \
-#     --resolution "$RES" \
-#     --device cuda \
-#     --batch-size 32 \
-#     --dataset-name "$DATASET_NAME" \
-#     --config configs/sparse-gt-data-philly.yml \
-#     --rpearl-embedding-mode data \
-#     --siamese 1 \
-#     --vn 0 \
-#     --layer-type SparseGT \
-#     --aggr 'sum+diff' \
-#     --p 4 \
-#     --loss mse_loss \
-#     --finetune 0 \
-#     --include-edge-attr 1 \
-#     --lr 0.003 \
-#     --trial 1 \
-#     --new \
-#     --single-graph-full-batch \
-#     --wandb-tag e28TR_philly_hybrid_sampling_full_test
+  # WANDB_PROJECT=terrains "$PYTHON_BIN" train_single_terrain_case.py \
+  #   --train-data "$TRAIN_FILE_REL" \
+  #   --test-data "$TEST_FILE_REL" \
+  #   --epochs 100 \
+  #   --resolution "$RES" \
+  #   --device cuda \
+  #   --batch-size 32 \
+  #   --dataset-name "$DATASET_NAME" \
+  #   --config configs/sparse-gt-data-philly.yml \
+  #   --rpearl-embedding-mode data \
+  #   --siamese 1 \
+  #   --vn 0 \
+  #   --layer-type SparseGT \
+  #   --aggr 'sum+diff' \
+  #   --p 4 \
+  #   --loss mse_loss \
+  #   --finetune 0 \
+  #   --include-edge-attr 1 \
+  #   --lr 0.003 \
+  #   --trial 1 \
+  #   --new \
+  #   --single-graph-full-batch \
+  #   --wandb-tag e30TR_cross_terrain_train_philly_test_norway
 done

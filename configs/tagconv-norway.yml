@@ -1,0 +1,23 @@
+# TAGConv configuration tuned for Norway terrain graphs
+# Best hyperparameters from sweep: hidden_dim=256, num_layers=3, lr=0.0005
+# Usage: --config configs/tagconv-norway.yml --layer-type TAGConv --lr 0.0005
+
+tagconv-norway:
+  gnn:
+    constr:
+      input: 3
+      hidden: 64
+      output: 64
+      layers: 3
+    layer_norm: false
+    dropout: true
+    activation: lrelu
+
+  mlp:
+    constr:
+      input: 128
+      hidden: 128
+      output: 1
+      layers: 3
+    layer_norm: false
+    dropout: true

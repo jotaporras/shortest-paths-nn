@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 """
-Wandb sweep agent script for SparseGT with data embedding on Philadelphia res=4.
+Wandb sweep agent script for SparseGT with random embedding on Philadelphia res=4.
 
 Usage:
     # 1. Create the sweep (once):
-    wandb sweep configs/sweep-sparse-gt-data-philly.yml
+    wandb sweep configs/sweep-sparse-gt-random-philly.yml
 
     # 2. Launch agent(s) — wandb agent calls this script directly:
     CUDA_VISIBLE_DEVICES=0 wandb agent <SWEEP_ID>
@@ -32,7 +32,7 @@ from refactor_training import (
 
 ENTITY = "alelab"
 PROJECT = "manifold-transformers-dev"
-WANDB_TAG = "sweep_sgt_data_philly"
+WANDB_TAG = "sweep_sgt_random_philly"
 
 TRAIN_FILE = PROJECT_ROOT / "data" / "philly_res10_hybrid.npz"
 TEST_FILE = PROJECT_ROOT / "data" / "generated2" / "philly_test_res04.npz"
@@ -62,7 +62,7 @@ def build_model_config(cfg):
                     "rpearl_num_layers": cfg["rpearl_num_layers"],
                     "dropout": cfg["dropout"],
                     "attn_dropout": cfg["attn_dropout"],
-                    "embedding_mode": "data",
+                    "embedding_mode": "random",
                     "pe_k": cfg["pe_k"],
                 },
             },
@@ -154,13 +154,12 @@ def train():
         p=cfg.get("p", 4),
         siamese=True,
         new=True,
-        run_name=f"sweep-SparseGT-data-res{RESOLUTION:02d}",
+        run_name=f"sweep-SparseGT-random-res{RESOLUTION:02d}",
         wandb_tag=[WANDB_TAG],
         wandb_config=wandb_config,
         single_graph_full_batch=True,
         test_dictionary=test_dictionary,
         val_dictionary=val_dictionary,
-        early_stopping_patience=30,
     )
 
     wandb.finish()

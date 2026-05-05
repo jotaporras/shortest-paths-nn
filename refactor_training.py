@@ -300,8 +300,8 @@ def npz_to_dataset(data):
 
     srcs = torch.tensor(data['srcs'], dtype=torch.int)
     tars = torch.tensor(data['tars'],  dtype=torch.int)
-    lengths = torch.tensor(data['lengths'])
-    node_features = torch.tensor(data['node_features'], dtype=torch.double)
+    lengths = torch.tensor(data['lengths'], dtype=torch.float)
+    node_features = torch.tensor(data['node_features'], dtype=torch.float)
     l2 = torch.norm(node_features[srcs] - node_features[tars], dim=1, p=2)
 
     train_dataset = SingleGraphShortestPathDataset(srcs, tars, lengths)
@@ -313,8 +313,8 @@ def debug_dataset(data, n=100):
 
     srcs = torch.tensor(data['srcs'][:n])
     tars = torch.tensor(data['tars'][:n])
-    lengths = torch.tensor(data['lengths'][:n])
-    node_features = torch.tensor(data['node_features'], dtype=torch.double)
+    lengths = torch.tensor(data['lengths'][:n], dtype=torch.float)
+    node_features = torch.tensor(data['node_features'], dtype=torch.float)
     l2 = torch.norm(node_features[srcs] - node_features[tars], dim=1, p=2)
 
     train_dataset = SingleGraphShortestPathDataset(srcs, tars, lengths)
@@ -462,14 +462,14 @@ def train_terrains_decoupled(train_dictionary,
     embedding_model_state = torch.load(prev_model_state_pth, map_location='cpu')
     print(embedding_model_state.keys())
     embedding_module.load_state_dict(embedding_model_state)
-    embedding_module.to(torch.double)
+    embedding_module.to(torch.float)
     
     print(model_config)
     print(embedding_module)
 
     
     mlp = configure_mlp_module(model_config['mlp'], aggr=aggr, new=new)
-    mlp = mlp.to(torch.double)
+    mlp = mlp.to(torch.float)
     mlp.to(device)
 
     for param in embedding_module.parameters():
@@ -681,7 +681,7 @@ def train_few_cross_terrain_case(train_dictionary,
     if finetune_from:
         embedding_model_state = torch.load(finetune_from, map_location='cpu')
         embedding_module.load_state_dict(embedding_model_state)
-    embedding_module.to(torch.double)
+    embedding_module.to(torch.float)
     embedding_module.to(device)
     print(embedding_module)    
     mlp=None
@@ -690,7 +690,7 @@ def train_few_cross_terrain_case(train_dictionary,
         parameters = embedding_module.parameters() #Thisis the one were using
     else:
         mlp = configure_mlp_module(model_config['mlp'], aggr=aggr, new=new)
-        mlp = mlp.to(torch.double)
+        mlp = mlp.to(torch.float)
         mlp.to(device)
         parameters = list(embedding_module.parameters()) + list(mlp.parameters())
         print(mlp)
@@ -787,7 +787,7 @@ def train_few_cross_terrain_case(train_dictionary,
         print(msg)
         logging.info(msg)
     
-    best_val_mae = float('inf')
+    best_val_nmae = float('inf')
     best_model_state = None
     epochs_without_improvement = 0
 
@@ -876,9 +876,9 @@ def train_few_cross_terrain_case(train_dictionary,
                 val_graph_data, device, layer_type, siamese, p, loss_func, 
                 tqdm_prefix="val"
             )
-            cur_val_mae = val_metrics['mae']
-            if cur_val_mae < best_val_mae:
-                best_val_mae = cur_val_mae
+            cur_val_nmae = val_metrics['nmae']
+            if cur_val_nmae < best_val_nmae:
+                best_val_nmae = cur_val_nmae
                 epochs_without_improvement = 0
                 best_model_state = {
                     'embedding': copy.deepcopy(embedding_module.state_dict()),
@@ -894,7 +894,7 @@ def train_few_cross_terrain_case(train_dictionary,
                 'val_acc_1pct': val_metrics['acc_1pct'],
                 'val_acc_2pct': val_metrics['acc_2pct'],
                 'val_acc_5pct': val_metrics['acc_5pct'],
-                'best_val_mae': best_val_mae,
+                'best_val_nmae': best_val_nmae,
                 'epoch': epoch,
             }, step=global_step)
 
@@ -907,7 +907,7 @@ def train_few_cross_terrain_case(train_dictionary,
         embedding_module.load_state_dict(best_model_state['embedding'])
         if mlp is not None and best_model_state['mlp'] is not None:
             mlp.load_state_dict(best_model_state['mlp'])
-        print(f"Restored best model (val_mae={best_val_mae:.6f}) for final evaluation")
+        print(f"Restored best model (val_nmae={best_val_nmae:.6f}) for final evaluation")
 
     # Compute final train metrics
     graph_data = train_dictionary['graphs'][0].to(device)
@@ -958,7 +958,7 @@ def train_few_cross_terrain_case(train_dictionary,
     for k, v in final_metrics.items():
         wandb.run.summary[k] = v
     wandb.run.summary['p'] = p
-    wandb.run.summary['best_val_mae'] = best_val_mae
+    wandb.run.summary['best_val_nmae'] = best_val_nmae
     logging.info(f'final training loss: {final_train_metrics["loss"]}')
     print("Final training loss:", final_train_metrics['loss'])
     print("siamese", siamese)

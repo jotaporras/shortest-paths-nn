@@ -1,0 +1,28 @@
+# Wandb sweep config: TAGConv GNN on Norway res=3
+#
+# Create:   wandb sweep configs/sweep-gnn-norway.yml
+# Run:      CUDA_VISIBLE_DEVICES=0 wandb agent <SWEEP_ID>
+
+project: manifold-transformers-dev
+program: scripts/sweep_gnn_norway.py
+method: bayes
+metric:
+  name: test_mae
+  goal: minimize
+
+parameters:
+  # --- GNN backbone ---
+  hidden_dim:
+    values: [32, 64, 128, 256]
+  num_layers:
+    values: [2, 3, 4, 5, 6]
+
+  # --- Training ---
+  lr:
+    distribution: log_uniform_values
+    min: 0.00001
+    max: 0.01
+  epochs:
+    value: 100
+  p:
+    value: 4

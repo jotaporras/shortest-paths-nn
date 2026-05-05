@@ -1,0 +1,48 @@
+# Wandb sweep config: SparseGT with random embedding on Philadelphia res=4
+#
+# Create:   wandb sweep configs/sweep-sparse-gt-random-philly.yml
+# Run:      CUDA_VISIBLE_DEVICES=0 wandb agent <SWEEP_ID>
+
+project: manifold-transformers-dev
+program: scripts/sweep_sparse_gt_random_philly.py
+method: bayes
+metric:
+  name: test_mae
+  goal: minimize
+
+parameters:
+  # --- Sparse GT backbone ---
+  hidden_dim:
+    values: [64, 128, 256]
+  num_layers:
+    values: [2, 3, 4, 5, 6]
+  num_heads:
+    values: [2, 4, 8]
+  num_hops:
+    values: [1, 2, 3, 4, 5]
+
+  # --- Positional encoding GCN ---
+  rpearl_num_layers:
+    values: [2, 3, 4, 5, 6]
+  pe_k:
+    values: [2, 3, 4, 5]
+
+  # --- Regularization ---
+  dropout:
+    distribution: uniform
+    min: 0.0
+    max: 0.5
+  attn_dropout:
+    distribution: uniform
+    min: 0.0
+    max: 0.3
+
+  # --- Training ---
+  lr:
+    distribution: log_uniform_values
+    min: 0.00001
+    max: 0.01
+  epochs:
+    value: 100
+  p:
+    value: 4
