@@ -2,7 +2,7 @@
 #SBATCH --job-name=e28TR_philly_hybrid_sampling_full_test
 #SBATCH --output=/vast/projects/aribeiro/alelab/jporras/shortest-paths-nn/slurm-%A_%a.out
 #SBATCH --time=55:00:00
-#SBATCH --partition=b200-mig45
+#SBATCH --partition=dgx-b200
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=14
 #SBATCH --mem=256G
