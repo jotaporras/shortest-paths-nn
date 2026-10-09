@@ -1,0 +1,16 @@
+{
+ "final_train_acc_1pct": 0.005,
+ "final_train_acc_2pct": 0.005,
+ "final_train_acc_5pct": 0.015,
+ "final_train_loss": 0.009728567004203796,
+ "final_train_mae": 0.08323164016008378,
+ "final_train_mse": 0.009728567004203796,
+ "final_train_nmae": 0.6037744855880738,
+ "test_acc_1pct": 0.0020920502092050207,
+ "test_acc_2pct": 0.006276150627615063,
+ "test_acc_5pct": 0.012552301255230125,
+ "test_loss": 0.0081797301901746,
+ "test_mae": 0.07002937996362542,
+ "test_mse": 0.0081797301901746,
+ "test_nmae": 0.6727534709615188
+}
