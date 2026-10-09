@@ -1,28 +1,20 @@
+"""Train one model per config entry on a terrain graph, evaluate on a test terrain.
+
+Usage: python -m spnn.cli.train --dataset-name ... --train-data ... --test-data ... --config ...
+"""
 import argparse
-from tqdm import tqdm, trange
-from torch.optim import Adam
-from torch_geometric.data import Data, HeteroData
-
-from src.baselines import *
-import numpy as np
-import torch
-import torch.nn as nn
-from torchmetrics.regression import MeanAbsolutePercentageError
-
-from torch.utils.data import Dataset, DataLoader
-from torch.utils.tensorboard.writer import SummaryWriter
-from torch_geometric.transforms import ToSparseTensor, VirtualNode, ToUndirected
-from torch_geometric.nn import to_hetero
-import yaml
 import os
 from pathlib import Path
-import csv
 
-from refactor_training import *
-import refactor_training
+import numpy as np
+import torch
+import yaml
+from torch.utils.data import DataLoader
+from torch_geometric.data import Data
 
-REPO_ROOT = Path(__file__).resolve().parent
-output_dir = Path(os.environ.get('TERRAIN_OUTPUT_DIR', REPO_ROOT))
+from ..data import npz_to_dataset, split_dataset_for_validation
+from ..training import format_log_dir, output_dir, train_few_cross_terrain_case
+
 
 def get_artificial_datasets(res=2):
     dataset_names = []
@@ -30,7 +22,7 @@ def get_artificial_datasets(res=2):
     amps = [1.0, 2.0, 4.0, 6.0, 8.0,9.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0]
     for a in amps:
         # TODO this is hardcoded fix it
-        pth = str(output_dir / 'data' / 'artificial' / 'change-heights' / f'amp-{a}-res-{res}-train-50k.npz')
+        pth = str(output_dir() / 'data' / 'artificial' / 'change-heights' / f'amp-{a}-res-{res}-train-50k.npz')
         name =  f'artificial/change-heights/amp-{a}-res-{res}-train-50k'
         dataset_names.append(name)
         train_data_pths.append(pth)
@@ -90,9 +82,9 @@ def main():
         if train_name.is_absolute():
             train_pth = train_name
         elif train_name.suffix:
-            train_pth = output_dir / 'data' / train_name
+            train_pth = output_dir() / 'data' / train_name
         else:
-            train_pth = output_dir / 'data' / f'{args.train_data}.npz'
+            train_pth = output_dir() / 'data' / f'{args.train_data}.npz'
         train_data_pths = [str(train_pth)]
         num_datasets = 1
     
@@ -102,13 +94,12 @@ def main():
         print("Now training:", dataset_name)
         print("Train data:", train_data_pth)
         for modelname in model_configs:
-            test_file = os.path.join(output_dir, 'data', args.test_data)
+            test_file = os.path.join(output_dir(), 'data', args.test_data)
             
 
             train_data = np.load(train_data_pth, allow_pickle=True)
             test_data = np.load(test_file, allow_pickle=True)
 
-            #train_dataset, train_node_features, train_edge_index = debug_dataset(train_data, n=100)
             train_dataset, train_node_features, train_edge_index = npz_to_dataset(train_data)
             test_dataset_full, test_node_features, test_edge_index = npz_to_dataset(test_data)
 
@@ -139,14 +130,13 @@ def main():
             else:
                 test_edge_attr_tensor = None
             
-            edge_dim = 1
             graph_data = Data(x=train_node_features, edge_index=train_edge_index, edge_attr=edge_attr)        
             test_graph_data = Data(x=test_node_features, edge_index=test_edge_index, edge_attr=test_edge_attr_tensor)
             train_dictionary = {'graphs': [graph_data], 'dataloaders': [train_dataloader]}
             val_dictionary = {'graphs': [test_graph_data], 'dataloaders': [val_dataloader]}
             test_dictionary = {'graphs': [test_graph_data], 'dataloaders': [test_dataloader]}
 
-            log_dir = format_log_dir(output_dir, 
+            log_dir = format_log_dir(output_dir(), 
                                     dataset_name, 
                                     siamese, 
                                     modelname, 
@@ -187,7 +177,7 @@ def main():
                 dataset_name.split('/')[-1] if '/' in dataset_name else dataset_name
             )
             
-            refactor_training.train_few_cross_terrain_case(train_dictionary=train_dictionary,
+            train_few_cross_terrain_case(train_dictionary=train_dictionary,
                                         model_config = config,
                                         layer_type = args.layer_type,
                                         device = args.device,

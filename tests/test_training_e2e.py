@@ -16,7 +16,7 @@ import torch
 import wandb
 import yaml
 
-import train_single_terrain_case
+from spnn.cli import train as train_cli
 from conftest import GOLDEN_DIR, requires_sparse_cpu
 
 GNN = {"constr": {"input": 3, "hidden": 8, "output": 8, "layers": 2},
@@ -52,9 +52,9 @@ def run_training(case, train_npz, test_npz, workdir: Path, monkeypatch):
         return run
 
     monkeypatch.setattr(wandb, "init", init_and_record)
-    monkeypatch.setattr(train_single_terrain_case, "output_dir", workdir)
+    monkeypatch.setenv("TERRAIN_OUTPUT_DIR", str(workdir))
     monkeypatch.setattr(sys, "argv", [
-        "train_single_terrain_case.py",
+        "spnn.cli.train",
         "--train-data", str(train_npz), "--test-data", str(test_npz),
         "--epochs", "3", "--device", "cpu", "--batch-size", "64",
         "--dataset-name", f"tests/{case}", "--config", str(config_path),
@@ -64,7 +64,7 @@ def run_training(case, train_npz, test_npz, workdir: Path, monkeypatch):
         "--run-name", f"test-{case}", *extra_args,
     ])
     torch.use_deterministic_algorithms(True, warn_only=True)
-    train_single_terrain_case.main()
+    train_cli.main()
 
     final = [d for d in logged if "final_train_loss" in d]
     assert len(final) == 1, "expected one final-metrics wandb.log call"

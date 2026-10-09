@@ -26,3 +26,5 @@ seaborn
 
 # Point sampler
 ripser
+# Quadtree simplification
+treelib

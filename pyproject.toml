@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spnn"
+version = "0.1.0"
+description = "Neural shortest-path distance prediction on terrain graphs"
+requires-python = ">=3.10"
+# torch, torch-geometric and torch_sparse must match the CUDA build;
+# install them first from the PyTorch and PyG wheel indexes (see README).
+dependencies = [
+    "torch",
+    "torch-geometric",
+    "torch_sparse",
+    "numpy",
+    "scipy",
+    "scikit-learn",
+    "pandas",
+    "networkx",
+    "torchmetrics",
+    "tqdm",
+    "pyyaml",
+    "wandb",
+    "matplotlib",
+    "ripser",
+    "treelib",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+
+[tool.setuptools.packages.find]
+include = ["spnn*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["legacy", "notebooks"]

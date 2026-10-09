@@ -75,7 +75,7 @@ def test_sweep_train_arguments_golden(name, terrain_pair, monkeypatch, update_go
     monkeypatch.setattr(module, "wandb", fake_wandb)
     monkeypatch.setattr(module, "np", SimpleNamespace(load=fake_load))
     monkeypatch.setattr(module, "format_log_dir", fake_format_log_dir)
-    monkeypatch.setattr(module.refactor_training, "train_few_cross_terrain_case", fake_train)
+    monkeypatch.setattr(module.training, "train_few_cross_terrain_case", fake_train)
     module.train()
 
     kwargs = calls["train"]

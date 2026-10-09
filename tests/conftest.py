@@ -1,7 +1,7 @@
 """Shared fixtures for the test suite.
 
-The training code reads TERRAIN_OUTPUT_DIR and calls wandb.login() at import
-time, so the environment is set here, before any test module imports it.
+wandb is disabled and TERRAIN_OUTPUT_DIR points at a temporary directory
+before any test module imports the training code.
 """
 import importlib.util
 import os

@@ -23,12 +23,9 @@ from torch.utils.data import DataLoader
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-import refactor_training
-from refactor_training import (
-    npz_to_dataset,
-    split_dataset_for_validation,
-    format_log_dir,
-)
+from spnn import training
+from spnn.data import npz_to_dataset, split_dataset_for_validation
+from spnn.training import format_log_dir
 
 ENTITY = "alelab"
 PROJECT = "manifold-transformers-dev"
@@ -141,7 +138,7 @@ def train():
         "sweep": True,
     }
 
-    refactor_training.train_few_cross_terrain_case(
+    training.train_few_cross_terrain_case(
         train_dictionary=train_dictionary,
         model_config=model_config,
         layer_type="SparseGT",

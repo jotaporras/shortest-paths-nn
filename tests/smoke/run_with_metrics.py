@@ -1,4 +1,4 @@
-"""Run train_single_terrain_case.py and write its logged metrics to a JSON file.
+"""Run spnn.cli.train and write its logged metrics to a JSON file.
 
 wandb (offline or disabled) does not leave a readable summary file, so this
 wrapper records every wandb.log call and writes:
@@ -11,7 +11,7 @@ deterministic CUDA kernel) and slows it about 7x, so the smoke test sets it
 for TAGConv only.
 
 Usage:
-    python tests/smoke/run_with_metrics.py <metrics.json> <train_single_terrain_case args...>
+    python tests/smoke/run_with_metrics.py <metrics.json> <spnn.cli.train args...>
 """
 import json
 import os
@@ -48,9 +48,9 @@ def main():
     wandb.init = init_and_record
     if os.environ.get("DETERMINISTIC") == "1":
         torch.use_deterministic_algorithms(True, warn_only=True)
-    sys.argv = ["train_single_terrain_case.py", *sys.argv[2:]]
-    import train_single_terrain_case
-    train_single_terrain_case.main()
+    sys.argv = ["spnn.cli.train", *sys.argv[2:]]
+    from spnn.cli import train as train_cli
+    train_cli.main()
 
     final = [d for d in logged if "final_train_loss" in d]
     val = [d for d in logged if any(k.startswith("val_") for k in d)]

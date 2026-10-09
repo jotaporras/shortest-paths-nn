@@ -1,3 +1,4 @@
+"""Loss functions on predicted vs. true shortest-path lengths."""
 import torch
 
 # MSE loss function
@@ -47,3 +48,12 @@ def square_distance_tar_MSE(pred, target):
 
 def square_distance_tar_MAE(pred, target):
     return torch.mean(torch.abs(pred - torch.square(target)))
+
+
+# Loss functions by the name used in --loss and configs. weighted_mse_loss is
+# left out because it needs a third argument that the training loop never passes.
+LOSSES = {fn.__name__: fn for fn in (
+    msle_loss, nmse_loss, nmae_loss, mse_loss, mae_loss, sqrt_distance, sqrt_distance_MAE,
+    squared_distance_prediction_MSE, squared_distance_prediction_MAE,
+    square_distance_tar_MSE, square_distance_tar_MAE,
+)}
