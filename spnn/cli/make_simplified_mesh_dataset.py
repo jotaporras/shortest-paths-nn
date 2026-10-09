@@ -29,7 +29,6 @@ def generate_dataset(vertex_file, edge_file, output_prefix):
             remapped_edges.append([id_to_index[v1], id_to_index[v2]])
 
     remapped_edges = np.array(remapped_edges).T
-    num_vertices = node_features.shape[0]
 
     distances = []
     for src, tgt in remapped_edges.T:

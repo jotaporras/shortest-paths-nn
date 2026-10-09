@@ -1,4 +1,4 @@
-"""Characterization tests for src/quadtree.py (quadtree terrain simplification).
+"""Characterization tests for spnn.graphs.quadtree (quadtree terrain simplification).
 
 No code imports this module today. It is kept as a graph-construction option.
 """
@@ -7,7 +7,7 @@ import pytest
 
 from conftest import synthetic_dem
 from golden_util import array_digest, check_golden
-from src import quadtree
+from spnn.graphs import quadtree
 
 
 def leaves(tree):

@@ -1,15 +1,15 @@
-"""DEM -> grid graph -> npz (dataset/dataset.py)."""
+"""DEM -> grid graph -> npz (spnn.graphs.grid, spnn.sampling.train_pairs)."""
 import networkx as nx
 import numpy as np
 import pytest
 
-from conftest import build_terrain_npz, load_dataset_module, synthetic_dem
+from conftest import build_terrain_npz, synthetic_dem
+from spnn.graphs.grid import construct_nx_graph, get_dem_xv_yv_
 
 
 def grid_graph(size, dem_resolution=10.0, edge_weight=False):
-    ds = load_dataset_module("dataset")
-    xv, yv, elevation = ds.get_dem_xv_yv_(synthetic_dem(size, seed=0), dem_resolution, visualize=False)
-    graph, node_features = ds.construct_nx_graph(xv, yv, elevation, scale=edge_weight)
+    xv, yv, elevation = get_dem_xv_yv_(synthetic_dem(size, seed=0), dem_resolution, visualize=False)
+    graph, node_features = construct_nx_graph(xv, yv, elevation, scale=edge_weight)
     return graph, np.array(node_features)
 
 

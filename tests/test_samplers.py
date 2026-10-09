@@ -1,4 +1,4 @@
-"""Training-pair samplers (dataset/point_sampler.py, dataset/dataset.py)."""
+"""Training-pair samplers (spnn.sampling.targets, spnn.sampling.train_pairs)."""
 import json
 from functools import partial
 
@@ -6,27 +6,27 @@ import networkx as nx
 import numpy as np
 import pytest
 
-from conftest import GOLDEN_DIR, build_terrain_npz, load_dataset_module, synthetic_dem
+from conftest import GOLDEN_DIR, build_terrain_npz, synthetic_dem
+from spnn.graphs.grid import construct_nx_graph, get_dem_xv_yv_
+from spnn.sampling import targets
 
 SIZE = 9
 
 
 @pytest.fixture(scope="module")
 def grid():
-    ds = load_dataset_module("dataset")
-    xv, yv, elevation = ds.get_dem_xv_yv_(synthetic_dem(SIZE, seed=0), 10.0, visualize=False)
-    graph, node_features = ds.construct_nx_graph(xv, yv, elevation)
+    xv, yv, elevation = get_dem_xv_yv_(synthetic_dem(SIZE, seed=0), 10.0, visualize=False)
+    graph, node_features = construct_nx_graph(xv, yv, elevation)
     return graph, np.array(node_features)
 
 
 def samplers(node_features):
-    ps = load_dataset_module("point_sampler")
-    alt_var = ps.compute_altitude_variance(node_features, SIZE, SIZE)
+    alt_var = targets.compute_altitude_variance(node_features, SIZE, SIZE)
     return {
-        "random_sampling": ps.random_sampling,
-        "distance_based": ps.distance_based,
-        "proximity_variance_sampling": partial(ps.proximity_variance_sampling, altitude_variance=alt_var),
-        "hybrid_sampling": partial(ps.hybrid_sampling, altitude_variance=alt_var),
+        "random_sampling": targets.random_sampling,
+        "distance_based": targets.distance_based,
+        "proximity_variance_sampling": partial(targets.proximity_variance_sampling, altitude_variance=alt_var),
+        "hybrid_sampling": partial(targets.hybrid_sampling, altitude_variance=alt_var),
     }
 
 
@@ -75,11 +75,10 @@ def test_sampler_never_returns_source_as_target(grid, name):
 
 def test_altitude_variance_matches_numpy_gradient(grid):
     _, node_features = grid
-    ps = load_dataset_module("point_sampler")
     z = node_features[:, 2].reshape(SIZE, SIZE)
     gy, gx = np.gradient(z)
     expected = np.sqrt(gx ** 2 + gy ** 2).ravel()
-    np.testing.assert_allclose(ps.compute_altitude_variance(node_features, SIZE, SIZE), expected)
+    np.testing.assert_allclose(targets.compute_altitude_variance(node_features, SIZE, SIZE), expected)
 
 
 @pytest.mark.parametrize("method", ["single-source-random", "distance-based", "proximity-variance", "hybrid"])

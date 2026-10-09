@@ -4,8 +4,8 @@ Hierarchical tree algorithm for approximating shortest paths on Terrain grid gra
 
 import numpy as np
 import networkx as nx
-from treelib import Tree, Node
-from tqdm import tqdm, trange
+from treelib import Tree
+from tqdm import tqdm
 
 def build_dem_qt_(array, lb, rb, ub, db, tree, parent, thresh=0.10):
     

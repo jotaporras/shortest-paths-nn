@@ -3,7 +3,6 @@
 wandb is disabled and TERRAIN_OUTPUT_DIR points at a temporary directory
 before any test module imports the training code.
 """
-import importlib.util
 import os
 import sys
 import tempfile
@@ -12,6 +11,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 import torch
+
+from spnn.graphs.grid import construct_nx_graph, get_dem_xv_yv_
+from spnn.sampling.train_pairs import construct_dataset
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
@@ -33,25 +35,6 @@ def update_golden(request):
     return request.config.getoption("--update-golden")
 
 
-def load_dataset_module(name: str):
-    """Import a module from dataset/ by file path.
-
-    dataset/dataset.py star-imports `point_sampler` as a top-level module and
-    shares its name with the package, so it cannot be imported normally.
-    """
-    dataset_dir = REPO_ROOT / "dataset"
-    if str(dataset_dir) not in sys.path:
-        sys.path.insert(0, str(dataset_dir))
-    module_name = f"_dataset_{name}"
-    if module_name in sys.modules:
-        return sys.modules[module_name]
-    spec = importlib.util.spec_from_file_location(module_name, dataset_dir / f"{name}.py")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
 def synthetic_dem(size: int, seed: int) -> np.ndarray:
     """Smooth random terrain in metres: two Gaussian hills plus noise."""
     rng = np.random.default_rng(seed)
@@ -65,11 +48,10 @@ def build_terrain_npz(path: Path, size: int, dem_resolution: float, seed: int,
                       num_srcs: int, samples_per_source: int,
                       sampling_method: str = "hybrid", edge_weight: bool = False) -> Path:
     """Run the repo's own DEM -> graph -> pairs pipeline on a synthetic DEM."""
-    ds = load_dataset_module("dataset")
-    xv, yv, elevation = ds.get_dem_xv_yv_(synthetic_dem(size, seed), dem_resolution, visualize=False)
-    graph, node_features = ds.construct_nx_graph(xv, yv, elevation, scale=edge_weight)
+    xv, yv, elevation = get_dem_xv_yv_(synthetic_dem(size, seed), dem_resolution, visualize=False)
+    graph, node_features = construct_nx_graph(xv, yv, elevation, scale=edge_weight)
     np.random.seed(seed)
-    ds.construct_dataset(G=graph, node_features=node_features, filename=str(path),
+    construct_dataset(G=graph, node_features=node_features, filename=str(path),
                          sampling_method=sampling_method, num_srcs=num_srcs,
                          samples_per_source=samples_per_source, rows=size, cols=size)
     return path

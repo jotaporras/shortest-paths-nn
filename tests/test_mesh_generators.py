@@ -1,16 +1,17 @@
 """Characterization tests for the triangle-mesh dataset generators.
 
-Covers dataset/process_triangulations.py (CSV input) and
-generate_simplified_mesh_dataset.py (whitespace text input).
+Covers spnn.graphs.mesh with spnn.cli.make_mesh_dataset (CSV input) and
+spnn.cli.make_simplified_mesh_dataset (whitespace text input).
 """
-import importlib.util
-
 import networkx as nx
 import numpy as np
 import pytest
 
-from conftest import REPO_ROOT, load_dataset_module, synthetic_dem
+from conftest import synthetic_dem
 from golden_util import array_digest, check_golden
+from spnn.cli import make_simplified_mesh_dataset as simplified
+from spnn.graphs.mesh import construct_mesh_graph, process_edges, process_node_features
+from spnn.sampling.train_pairs import construct_dataset
 
 SIZE = 5
 
@@ -40,11 +41,6 @@ def tiny_mesh(seed=0, contiguous=False):
     return ids, coords, edges
 
 
-@pytest.fixture(scope="module")
-def triang():
-    return load_dataset_module("process_triangulations")
-
-
 def write_mesh_csvs(tmp_path, contiguous=False):
     ids, coords, edges = tiny_mesh(contiguous=contiguous)
     nodes = tmp_path / "nodes.csv"
@@ -60,18 +56,18 @@ def mesh_csvs(tmp_path):
     return write_mesh_csvs(tmp_path)
 
 
-def test_process_node_features_converts_to_km(triang, mesh_csvs):
+def test_process_node_features_converts_to_km(mesh_csvs):
     ids, coords, _ = tiny_mesh()
-    node_idx_dict, node_feature_lst = triang.process_node_features(mesh_csvs[0])
+    node_idx_dict, node_feature_lst = process_node_features(mesh_csvs[0])
     assert np.allclose(node_feature_lst, coords / 1000)
     assert node_idx_dict[int(ids[3])] == pytest.approx(list(coords[3] / 1000))
 
 
 @pytest.mark.parametrize("scale", [False, True])
-def test_mesh_graph_weights(triang, mesh_csvs, scale):
-    node_idx_dict, _ = triang.process_node_features(mesh_csvs[0])
-    edges = triang.process_edges(mesh_csvs[1])
-    G = triang.construct_nx_graph(edges, node_idx_dict, scale=scale)
+def test_mesh_graph_weights(mesh_csvs, scale):
+    node_idx_dict, _ = process_node_features(mesh_csvs[0])
+    edges = process_edges(mesh_csvs[1])
+    G = construct_mesh_graph(edges, node_idx_dict, scale=scale)
     assert G.number_of_edges() == len(edges)
     for u, v, w in G.edges(data="weight"):
         p1, p2 = np.array(node_idx_dict[u]), np.array(node_idx_dict[v])
@@ -82,15 +78,16 @@ def test_mesh_graph_weights(triang, mesh_csvs, scale):
         assert w == pytest.approx(dist, rel=1e-12)
 
 
-def test_process_triangulations_dataset_golden(triang, tmp_path, update_golden):
+def test_process_triangulations_dataset_golden(tmp_path, update_golden):
     """Pins the pairs for a mesh whose vertex ids are 0..N-1."""
     mesh_csvs = write_mesh_csvs(tmp_path, contiguous=True)
-    node_idx_dict, node_features = triang.process_node_features(mesh_csvs[0])
-    edges = triang.process_edges(mesh_csvs[1])
-    G = triang.construct_nx_graph(edges, node_idx_dict)
+    node_idx_dict, node_features = process_node_features(mesh_csvs[0])
+    edges = process_edges(mesh_csvs[1])
+    G = construct_mesh_graph(edges, node_idx_dict)
     np.random.seed(0)
     path = tmp_path / "mesh.npz"
-    triang.construct_dataset(G, node_features, str(path), num_srcs=4, samples_per_source=6)
+    construct_dataset(G, node_features, str(path), sampling_method="single-source-random",
+                      num_srcs=4, samples_per_source=6)
     data = np.load(path)
     observed = {
         "srcs": data["srcs"].tolist(),
@@ -103,36 +100,19 @@ def test_process_triangulations_dataset_golden(triang, tmp_path, update_golden):
                  float_keys=("lengths_sum", "distances_sum"))
 
 
-def test_process_triangulations_noncontiguous_ids_crash(triang, mesh_csvs, tmp_path):
+def test_process_triangulations_noncontiguous_ids_crash(mesh_csvs, tmp_path):
     """Bug for pass 2: sources are drawn as 0..N-1 indices, but graph nodes are raw ids.
 
     Also, edge_index keeps raw ids while node_features is in file order.
     """
-    node_idx_dict, node_features = triang.process_node_features(mesh_csvs[0])
-    G = triang.construct_nx_graph(triang.process_edges(mesh_csvs[1]), node_idx_dict)
+    node_idx_dict, node_features = process_node_features(mesh_csvs[0])
+    G = construct_mesh_graph(process_edges(mesh_csvs[1]), node_idx_dict)
     np.random.seed(0)
     with pytest.raises(nx.NodeNotFound):
-        triang.construct_dataset(G, node_features, str(tmp_path / "x.npz"), 4, 6)
+        construct_dataset(G, node_features, str(tmp_path / "x.npz"), "single-source-random", 4, 6)
 
 
-def test_process_triangulations_rejects_other_methods(triang, mesh_csvs, tmp_path):
-    node_idx_dict, node_features = triang.process_node_features(mesh_csvs[0])
-    G = triang.construct_nx_graph(triang.process_edges(mesh_csvs[1]), node_idx_dict)
-    with pytest.raises(NotImplementedError):
-        triang.construct_dataset(G, node_features, str(tmp_path / "x.npz"), 1, 1,
-                                 sampling_method="hybrid")
-
-
-@pytest.fixture(scope="module")
-def simplified():
-    spec = importlib.util.spec_from_file_location(
-        "_generate_simplified_mesh_dataset", REPO_ROOT / "generate_simplified_mesh_dataset.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def test_simplified_mesh_dataset_golden(simplified, tmp_path, update_golden):
+def test_simplified_mesh_dataset_golden(tmp_path, update_golden):
     """generate_dataset draws a fixed 62,500 random pairs, then splits 80/20."""
     ids, coords, edges = tiny_mesh()
     vertex_file = tmp_path / "v.txt"

@@ -78,6 +78,13 @@ each experiment's settings.
 | `smaller_*.sh` | Data generation for the smaller test and transferability sets. |
 | `sparse_gt_gridsearch.sh`, `sweep.sh` | Grid searches over SparseGT settings and TAGConv learning rate. |
 
+## sweeps/ — the 6 original sweep agents
+
+`sweep_{gnn,sparse_gt_data,sparse_gt_random}_{norway,philly}.py` are merged
+into `spnn/cli/sweep.py`, one preset per script. `tests/test_sweep_configs.py`
+checks that each preset passes the same arguments the script passed.
+Usefulness: record.
+
 ## wandb_tools/ — one-off W&B maintenance
 
 | File | What it does |

@@ -1,10 +1,10 @@
-"""Characterization tests for the 6 wandb sweep agents in scripts/sweep_*.py.
+"""Characterization tests for the wandb sweep agent spnn.cli.sweep.
 
-Pass 1 merges them into one CLI with presets. These tests run each agent's
-train() with wandb, np.load and the training call replaced by recorders, and
-pin every argument the agent passes on.
+Pass 1 merged 6 scripts (now in legacy/sweeps/) into one CLI with presets.
+These tests run each preset's train() with wandb, np.load and the training
+call replaced by recorders, and pin every argument the agent passes on. The
+goldens were recorded from the 6 original scripts.
 """
-import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -14,6 +14,7 @@ import yaml
 
 from conftest import REPO_ROOT
 from golden_util import check_golden
+from spnn.cli import sweep
 
 SWEEPS = ["gnn_norway", "gnn_philly",
           "sparse_gt_data_norway", "sparse_gt_data_philly",
@@ -23,14 +24,6 @@ SWEEPS = ["gnn_norway", "gnn_philly",
 SWEEP_VALUES = {"hidden_dim": 64, "num_layers": 3, "num_heads": 4, "num_hops": 2,
                 "rpearl_num_layers": 2, "pe_k": 8, "dropout": 0.1, "attn_dropout": 0.05,
                 "lr": 1e-3, "epochs": 7, "p": 4}
-
-
-def load_sweep(name):
-    spec = importlib.util.spec_from_file_location(
-        f"_sweep_{name}", REPO_ROOT / "scripts" / f"sweep_{name}.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def rel(value):
@@ -48,13 +41,13 @@ def rel(value):
 def test_sweep_yaml_points_at_its_script(name):
     cfg = yaml.safe_load((REPO_ROOT / "configs" / f"sweep-{name.replace('_', '-')}.yml")
                          .read_text())
-    assert cfg["program"] == f"scripts/sweep_{name}.py"
+    assert cfg["command"][-3:] == ["spnn.cli.sweep", "--preset", name]
     assert set(cfg["parameters"]) <= set(SWEEP_VALUES)
 
 
 @pytest.mark.parametrize("name", SWEEPS)
 def test_sweep_train_arguments_golden(name, terrain_pair, monkeypatch, update_golden):
-    module = load_sweep(name)
+    module = sweep
     calls = {}
     fake_wandb = SimpleNamespace(init=lambda: SimpleNamespace(id="RUNID"),
                                  config=dict(SWEEP_VALUES), finish=lambda: None)
@@ -75,8 +68,8 @@ def test_sweep_train_arguments_golden(name, terrain_pair, monkeypatch, update_go
     monkeypatch.setattr(module, "wandb", fake_wandb)
     monkeypatch.setattr(module, "np", SimpleNamespace(load=fake_load))
     monkeypatch.setattr(module, "format_log_dir", fake_format_log_dir)
-    monkeypatch.setattr(module.training, "train_few_cross_terrain_case", fake_train)
-    module.train()
+    monkeypatch.setattr(module, "train_few_cross_terrain_case", fake_train)
+    module.train(name)
 
     kwargs = calls["train"]
     train_graph = kwargs.pop("train_dictionary")["graphs"][0]
@@ -85,9 +78,15 @@ def test_sweep_train_arguments_golden(name, terrain_pair, monkeypatch, update_go
     assert val["graphs"][0] is test["graphs"][0]
     assert train_graph.edge_attr.dtype.is_floating_point
     observed = {
-        "constants": {k: rel(getattr(module, k)) for k in
-                      ("ENTITY", "PROJECT", "WANDB_TAG", "TRAIN_FILE", "TEST_FILE",
-                       "DATASET_NAME", "RESOLUTION")},
+        "constants": {
+            "ENTITY": module.ENTITY,
+            "PROJECT": module.PROJECT,
+            "WANDB_TAG": module.PRESETS[name]["wandb_tag"],
+            "TRAIN_FILE": rel(module.PROJECT_ROOT / module.PRESETS[name]["train_file"]),
+            "TEST_FILE": rel(module.PROJECT_ROOT / module.PRESETS[name]["test_file"]),
+            "DATASET_NAME": module.PRESETS[name]["dataset_name"],
+            "RESOLUTION": module.PRESETS[name]["resolution"],
+        },
         "loaded": loaded,
         "format_log_dir": calls["format_log_dir"],
         "train_kwargs": rel(kwargs),

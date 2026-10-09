@@ -4,7 +4,14 @@
 # Run:      CUDA_VISIBLE_DEVICES=0 wandb agent <SWEEP_ID>
 
 project: manifold-transformers-dev
-program: scripts/sweep_sparse_gt_data_norway.py
+program: spnn/cli/sweep.py
+command:
+  - ${env}
+  - ${interpreter}
+  - -m
+  - spnn.cli.sweep
+  - --preset
+  - sparse_gt_data_norway
 method: bayes
 metric:
   name: test_mae
