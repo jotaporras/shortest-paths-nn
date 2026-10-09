@@ -1,0 +1,79 @@
+{
+ "batch_size": 32,
+ "constants": {
+  "DATASET_NAME": "philadelphia/res04",
+  "ENTITY": "alelab",
+  "PROJECT": "manifold-transformers-dev",
+  "RESOLUTION": 4,
+  "TEST_FILE": "<root>/data/generated2/philly_test_res04.npz",
+  "TRAIN_FILE": "<root>/data/philly_res04_hybrid.npz",
+  "WANDB_TAG": "sweep_gnn_philly"
+ },
+ "format_log_dir": [
+  "<root>",
+  "philadelphia/res04",
+  true,
+  "tagconv-k3",
+  false,
+  "sum+diff",
+  "mse_loss",
+  "TAGConv",
+  4,
+  "RUNID"
+ ],
+ "loaded": [
+  "<root>/data/philly_res04_hybrid.npz",
+  "<root>/data/generated2/philly_test_res04.npz"
+ ],
+ "test_size": 478,
+ "train_kwargs": {
+  "aggr": "sum+diff",
+  "base_log_dir": "<log_dir>",
+  "device": "cuda",
+  "epochs": 7,
+  "layer_type": "TAGConv",
+  "loss_func": "mse_loss",
+  "lr": 0.001,
+  "model_config": {
+   "gnn": {
+    "activation": "lrelu",
+    "constr": {
+     "hidden": 64,
+     "input": 3,
+     "layers": 3,
+     "output": 64
+    },
+    "dropout": true,
+    "layer_norm": false
+   },
+   "mlp": {
+    "constr": {
+     "hidden": 128,
+     "input": 64,
+     "layers": 3,
+     "output": 1
+    },
+    "dropout": true,
+    "layer_norm": false
+   }
+  },
+  "new": true,
+  "p": 4,
+  "run_name": "sweep-TAGConv-res04",
+  "siamese": true,
+  "single_graph_full_batch": true,
+  "wandb_config": {
+   "batch_size": 32,
+   "dataset_name": "philadelphia/res04",
+   "include_edge_attr": 1,
+   "resolution": 4,
+   "sweep": true,
+   "test_data": "<root>/data/generated2/philly_test_res04.npz",
+   "train_data": "<root>/data/philly_res04_hybrid.npz"
+  },
+  "wandb_tag": [
+   "sweep_gnn_philly"
+  ]
+ },
+ "val_size": 2
+}

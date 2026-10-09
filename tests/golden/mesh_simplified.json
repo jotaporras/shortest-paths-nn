@@ -1,0 +1,9 @@
+{
+ "distances_sum": 3791.916795358532,
+ "edge_index_digest": "921971b3745dcfaaae11d2366ecf0d0451424732f0713c2d5d3585a21396606d",
+ "lengths_sum": 7018716.989543859,
+ "srcs_digest": "bc99782615fb7bf86c2bfe332a19a9e149a3f90d7952d0d3c10ef2c200930cfe",
+ "tars_digest": "de7306ae252768d80359bde46da948ad064462020f162b43bf49c4e5e2c83f35",
+ "test_tars_digest": "7be91f3e0d5cb057be1e5d8b6d7954330f7c1d0287337c599494d15d1cfe2be3",
+ "train_srcs_digest": "348be98feaa7eff1629a09f9f57bbcd3ef1e7db4437ba6a03a0eaaffc8ea57c8"
+}

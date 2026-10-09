@@ -1,0 +1,90 @@
+{
+ "batch_size": 32,
+ "constants": {
+  "DATASET_NAME": "norway/res10",
+  "ENTITY": "alelab",
+  "PROJECT": "manifold-transformers-dev",
+  "RESOLUTION": 10,
+  "TEST_FILE": "<root>/data/generated2/full_test-004.npz",
+  "TRAIN_FILE": "<root>/data/res10_hybrid.npz",
+  "WANDB_TAG": "sweep_sgt_data_norway"
+ },
+ "format_log_dir": [
+  "<root>",
+  "norway/res10",
+  true,
+  "sparse-gt-rpearl",
+  false,
+  "sum+diff",
+  "mse_loss",
+  "SparseGT",
+  4,
+  "RUNID"
+ ],
+ "loaded": [
+  "<root>/data/res10_hybrid.npz",
+  "<root>/data/generated2/full_test-004.npz"
+ ],
+ "test_size": 478,
+ "train_kwargs": {
+  "aggr": "sum+diff",
+  "base_log_dir": "<log_dir>",
+  "device": "cuda",
+  "epochs": 7,
+  "layer_type": "SparseGT",
+  "loss_func": "mse_loss",
+  "lr": 0.001,
+  "model_config": {
+   "gnn": {
+    "activation": "lrelu",
+    "constr": {
+     "hidden": 64,
+     "input": 3,
+     "layers": 3,
+     "output": 64
+    },
+    "dropout": true,
+    "layer_norm": false,
+    "sparse_gt": {
+     "attn_dropout": 0.05,
+     "dropout": 0.1,
+     "embedding_mode": "data",
+     "hidden_dim": 64,
+     "num_heads": 4,
+     "num_hops": 2,
+     "num_layers": 3,
+     "pe_k": 8,
+     "rpearl_num_layers": 2
+    }
+   },
+   "mlp": {
+    "constr": {
+     "hidden": 128,
+     "input": 64,
+     "layers": 3,
+     "output": 1
+    },
+    "dropout": true,
+    "layer_norm": false
+   }
+  },
+  "new": true,
+  "p": 4,
+  "run_name": "sweep-SparseGT-data-res10",
+  "siamese": true,
+  "single_graph_full_batch": true,
+  "wandb_config": {
+   "batch_size": 32,
+   "dataset_name": "norway/res10",
+   "include_edge_attr": 1,
+   "resolution": 10,
+   "sweep": true,
+   "test_data": "<root>/data/generated2/full_test-004.npz",
+   "train_data": "<root>/data/res10_hybrid.npz"
+  },
+  "wandb_tag": [
+   "sweep_sgt_data_norway"
+  ]
+ },
+ "val_size": 2
+}
