@@ -165,7 +165,7 @@ cython_debug/
 #.idea/
 wandb
 data
-models
+/models/
 wandb-metadata.json
 .vscode
 models_first_exps_2025/
