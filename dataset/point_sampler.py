@@ -1,5 +1,4 @@
-# I took this chunk of code from Haoyun Wang's final project 
-# from the Topological Data Analysis course from UCSD.
+# Persistent homology-based sampling implementation for terrain graphs.
 
 import numpy as np
 import torch

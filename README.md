@@ -1,5 +1,5 @@
 # Repository for "De-coupled NeuroGF for Shortest Path Distance Approximation on Large Scale Terrain Graphs"
-This is the corresponding repository for ""De-coupled NeuroGF for Shortest Path Distance Approximation on Large Scale Terrain Graphs" (S. Chen, P. K. Agarwal, Y. Wang, ICML 2025). 
+This is the corresponding repository for the paper "De-coupled NeuroGF for Shortest Path Distance Approximation on Large Scale Terrain Graphs" submitted to ICML 2025. 
 
 ### Dependencies
 This repository depends on PyTorch and PyTorch Geometric. All code should be compatible with the latest versions of each package.
@@ -27,6 +27,39 @@ To run the de-coupled experiments, you can use another bash script. I used two s
 
 `./run-experiment-de-coupled.sh <experiment-config-here> <trial> --flag1 --flag2`.
 
+### Example: Training TAGConv on Norway terrain graphs
+
+Below is an example of training a TAGConv model on different resolution terrain graphs using the Python training script directly:
+
+```bash
+# Train TAGConv on resolution 05 (Phase 1: GNN training)
+python train_single_terrain_case.py \
+    --train-data generated2/res05_phase1.npz \
+    --test-data generated2/full_test10ksrc-004.npz \
+    --epochs 500 \
+    --device cuda \
+    --batch-size 512 \
+    --dataset-name norway/res05 \
+    --config configs/tagconv-k5.yml \
+    --siamese 1 \
+    --vn 0 \
+    --layer-type TAGConv \
+    --aggr 'sum+diff' \
+    --p 4 \
+    --loss mse_loss \
+    --finetune 0 \
+    --include-edge-attr 1 \
+    --lr 0.0001 \
+    --trial 1 \
+    --new \
+    --wandb-tag stage1 TAGConv train-res05 test-004
+```
+
+**Note:**
+- Use batch size 512 for resolutions res01-05 (larger graphs) and 1024 for res06+ (smaller graphs)
+- The `--new` flag enables layer normalization and SiLU activation for improved performance
+- Training data uses Phase 1 datasets (`res*_phase1.npz`) which use distance-based sampling for GNN training
+- Phase 2 (MLP finetuning) would use `res*_phase2.npz` datasets with single-source-random sampling
 
 ## Updated MLP 06/20/2025
 In our original experiments and paper, we reported results using an MLP with `LeakyReLU` as the activation function, no layer normalization, and per-layer dropout of 0.30. However, we found that we are actually able to boost the performance of just the MLP layer by using the `SiLU` activation function, layer normalization, and no dropout. 

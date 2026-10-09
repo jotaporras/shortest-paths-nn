@@ -5,14 +5,8 @@ import torch.nn as nn
 from torch_geometric.nn import GCNConv, GINConv, GATConv, GCN2Conv, TransformerConv, to_hetero, GeneralConv, GATv2Conv,GCN,TAGConv
 from torch.nn import ReLU, LeakyReLU, Sigmoid, SiLU
 from torch_geometric.nn.conv import MessagePassing
-from torch_geometric.nn import aggr 
+from torch_geometric.nn import aggr
 from torch_geometric.nn.norm import LayerNorm
-
-# import torch_geometric.graphgym.models.head  # noqa, register module
-# import torch_geometric.graphgym.register as register
-# from torch_geometric.graphgym.config import cfg
-# from torch_geometric.graphgym.models.gnn import FeatureEncoder, GNNPreMP
-# from torch_geometric.graphgym.register import register_network
 from torch_geometric.nn import global_add_pool
 import torch.nn.functional as F
 
@@ -137,8 +131,7 @@ class MLPBaseline0(nn.Module):
         self.siamese = siamese
         self.final = final
         self.max = max
-        print("max?", self.max)
-    
+
     def init_weights(self):
         for m in self.siamese:
             if isinstance(m, nn.Linear):

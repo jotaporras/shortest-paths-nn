@@ -439,7 +439,6 @@ class KHopGTModel(nn.Module):
         return attn_window
 
     def forward(self, data: Data):
-        ##TODO this should be handled at the data level.
         num_nodes = data.x.shape[0]
         dtype = data.edge_index.dtype
         device = data.edge_index.device

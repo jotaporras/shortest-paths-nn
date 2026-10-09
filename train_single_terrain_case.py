@@ -30,7 +30,6 @@ def get_artificial_datasets(res=2):
     train_data_pths = []
     amps = [1.0, 2.0, 4.0, 6.0, 8.0,9.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0]
     for a in amps:
-        # TODO this is hardcoded fix it
         pth = str(output_dir / 'data' / 'artificial' / 'change-heights' / f'amp-{a}-res-{res}-train-50k.npz')
         name =  f'artificial/change-heights/amp-{a}-res-{res}-train-50k'
         dataset_names.append(name)
@@ -90,8 +89,6 @@ def main():
     for i in range(num_datasets):
         dataset_name = dataset_names[i]
         train_data_pth = train_data_pths[i]
-        print("Now training:", dataset_name)
-        print("Train data:", train_data_pth)
         for modelname in model_configs:
             test_file = os.path.join(output_dir, 'data', args.test_data)
             

@@ -120,7 +120,6 @@ class CustomSelfAttention(nn.Module):
         self.activation = nn.ReLU()
 
     def forward(self, X: torch.tensor) -> torch.tensor:
-        # TODO support batches. Right now it's tailored for the PyG single Data object.
         N, C = X.shape
 
         X = X.unsqueeze(
@@ -592,8 +591,6 @@ class GraphClassifier(nn.Module):
 
 class LaplacianGraphTransformer(nn.Module):
     """
-    #TODO: This code is legacy, and mixes backbone and positional encodings. 
-
     A graph transformer backbone using Laplacian eigenvector positional encodings.
 
     This model:

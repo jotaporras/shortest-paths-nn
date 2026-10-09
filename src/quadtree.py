@@ -57,7 +57,6 @@ def quadtree_simplification(tree, num_rows, num_cols):
         if node.is_leaf():
             lb, rb, ub, db = node.data
             leaf_list.append((node, abs(rb - lb)*abs(ub - db)))
-    print("loading quadtree simplification of terrain.....")
 
     for val in tqdm(leaf_list):
         

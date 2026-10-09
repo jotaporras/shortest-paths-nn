@@ -293,9 +293,8 @@ def construct_dataset(G,
         """
         Sample source points only from mountain ridges
 
-        Mountain ridges are found from discrete Morse reconstruction algorithm and generated using
-        https://github.com/wangjiayuan007/graph_recon_DM (Jiayuan Wang). Download and follow the 
-        directions in that repository to generate your own set of Morse points. 
+        Mountain ridges are found from discrete Morse reconstruction algorithm.
+        Morse points can be generated using publicly available discrete Morse reconstruction tools. 
         """
         
         morse_pts = np.load(f'/data/sam/terrain/data/norway/{rows}-morse-points-t-{threshhold}.npy')
@@ -315,9 +314,8 @@ def construct_dataset(G,
         """
         Sample source points only from mountain ridges
 
-        Mountain ridges are found from discrete Morse reconstruction algorithm and generated using
-        https://github.com/wangjiayuan007/graph_recon_DM (Jiayuan Wang). Download and follow the 
-        directions in that repository to generate your own set of Morse points. 
+        Mountain ridges are found from discrete Morse reconstruction algorithm.
+        Morse points can be generated using publicly available discrete Morse reconstruction tools. 
         """
         
         morse_pts = np.load(f'/data/sam/terrain/data/norway/{rows}-morse-points-t-{threshhold}.npy')
@@ -405,7 +403,6 @@ def main():
         print('resolution:', res)
         if args.change_heights:
             for k in range(1, 60):
-                #TODO this doesnt matter is a dead path
                 filename = f'/data/terrain/datasets/norway/uncertainty/50/50k-{k}.npz'
                 uncertainty = np.random.uniform(-0.050, 0.050, size=elevations_n.shape)
                 elevations_n = uncertainty + elevations_n

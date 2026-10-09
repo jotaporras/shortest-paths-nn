@@ -183,10 +183,8 @@ def test_model_error(embeddings, srcs, tars, lengths, mlp_model=None, p=1, vn_em
     if vn_emb is not None:
         vn_emb = torch.tensor(vn_emb)
     if mlp_model:
-        print("mlp predictions.....")
-        preds = mlp_model(torch.tensor(embeddings[srcs]), 
+        preds = mlp_model(torch.tensor(embeddings[srcs]),
                           torch.tensor(embeddings[tars]), vn_emb=vn_emb)
-        print("finished mlp predictions")
         preds = preds.squeeze(1).detach().numpy()
     else:
         preds = np.linalg.norm(embeddings[srcs]- embeddings[tars], ord=p, axis=1)

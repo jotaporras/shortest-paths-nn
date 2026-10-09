@@ -25,7 +25,6 @@ class TerrainHeteroData(HeteroData):
 
 def add_node_attr(data: Data, value: Any,
                   attr_name: Optional[str] = None) -> Data:
-    # TODO Move to `BaseTransform`.
     if attr_name is None:
         if 'x' in data:
             x = data.x.view(-1, 1) if data.x.dim() == 1 else data.x
@@ -101,22 +100,3 @@ def add_virtual_node_patch(data):
     hetero_data['vn', 'e2', 'real'].edge_index = torch.tensor(vn_edge_index, dtype=torch.long)
     hetero_data = ToUndirected()(hetero_data)
     return hetero_data
-
-def test():
-    # simple 3-cycle
-    x_feat = torch.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=torch.float)
-    edge_index = torch.tensor([[0, 0, 1, 1, 2, 2], [1, 2, 0, 2, 1, 0]])
-    #edge_index = torch.tensor([[0, 1, 2], [1, 2, 0]], dtype=torch.long)
-    graph = Data(x = x_feat, edge_index = edge_index)
-    vn_graph = add_virtual_node(graph)
-    vn_graph = ToUndirected()(vn_graph)
-    print(vn_graph)
-
-    gnn_model = VNModel(vn_graph.metadata(), layer_type='GATConv' )
-    print("trying gnn")
-    val = gnn_model(vn_graph)
-    print(val)
-    
-
-if __name__ == "__main__":
-    test()
