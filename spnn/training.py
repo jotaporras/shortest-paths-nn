@@ -16,6 +16,8 @@ from .models.factory import configure_embedding_module, configure_mlp_module
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+logger = logging.getLogger(__name__)
+
 
 def output_dir() -> Path:
     """Root for data, models and wandb files. Read at call time from TERRAIN_OUTPUT_DIR."""
@@ -82,7 +84,6 @@ def train_few_cross_terrain_case(train_dictionary,
         embedding_module.load_state_dict(embedding_model_state)
     embedding_module.to(torch.float)
     embedding_module.to(device)
-    print(embedding_module)    
     mlp=None
 
     if siamese:
@@ -146,13 +147,17 @@ def train_few_cross_terrain_case(train_dictionary,
     os.makedirs(record_dir, exist_ok=True)
 
     log_file = os.path.join(record_dir, 'training_log.log')
-    logging.basicConfig(level=logging.INFO, filename=log_file, force=True)
+    # Write this run's log to its record dir without reconfiguring the root logger.
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(logging.Formatter('%(levelname)s:%(name)s:%(message)s'))
+    logger.addHandler(file_handler)
+    logger.setLevel(logging.INFO)
 
-    logging.info(f'GNN layer: {layer_type}')
-    logging.info(f'Number of epochs: {epochs}')
-    logging.info(f'MLP aggregation: {aggr}')
-    logging.info(f'Siamese? {siamese}')
-    logging.info(f'loss function: {loss_func}')
+    logger.info(f'GNN layer: {layer_type}')
+    logger.info(f'Number of epochs: {epochs}')
+    logger.info(f'MLP aggregation: {aggr}')
+    logger.info(f'Siamese? {siamese}')
+    logger.info(f'loss function: {loss_func}')
     print("logging to....", record_dir)
 
     use_single_graph_full_batch = (
@@ -167,7 +172,7 @@ def train_few_cross_terrain_case(train_dictionary,
             "single-graph, non-MLP siamese training. Falling back to batch mode."
         )
         print(msg)
-        logging.info(msg)
+        logger.info(msg)
 
     full_batch_graph = None
     full_batch_srcs = None
@@ -184,7 +189,7 @@ def train_few_cross_terrain_case(train_dictionary,
             f"{len(full_batch_srcs)} source-target pairs."
         )
         print(msg)
-        logging.info(msg)
+        logger.info(msg)
     
     best_val_nmae = float('inf')
     best_model_state = None
@@ -348,8 +353,8 @@ def train_few_cross_terrain_case(train_dictionary,
         preds_path = os.path.join(log_dir, 'preds.csv')
         os.makedirs(os.path.dirname(preds_path), exist_ok=True)
         final_test_metrics['all_preds_df'].to_csv(preds_path, index=False)
-        logging.info(f'Saved predictions to {preds_path}')
-        logging.info(f'final test loss: {final_test_metrics["loss"]}')
+        logger.info(f'Saved predictions to {preds_path}')
+        logger.info(f'final test loss: {final_test_metrics["loss"]}')
         print("Final test loss:", final_test_metrics['loss'])
     
     wandb.log(final_metrics, step=global_step)
@@ -357,9 +362,10 @@ def train_few_cross_terrain_case(train_dictionary,
         wandb.run.summary[k] = v
     wandb.run.summary['p'] = p
     wandb.run.summary['best_val_nmae'] = best_val_nmae
-    logging.info(f'final training loss: {final_train_metrics["loss"]}')
+    logger.info(f'final training loss: {final_train_metrics["loss"]}')
     print("Final training loss:", final_train_metrics['loss'])
-    print("siamese", siamese)
+    logger.removeHandler(file_handler)
+    file_handler.close()
     os.makedirs(log_dir, exist_ok=True)
     if siamese:
         path = os.path.join(log_dir, 'final_model.pt')

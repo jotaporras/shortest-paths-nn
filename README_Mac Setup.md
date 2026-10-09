@@ -1,27 +1,26 @@
 # Mac Setup
-This is the setup that worked for me on mac 2025-11-04. 
-
+This setup is for the `asilomar` branch (Apple silicon, CPU only).
+An older setup from 2025-11-04 used torch 2.4.0 and the env `shortest-paths-nn`.
 
 ```bash
 # Create env
-conda create -n shortest-paths-nn python=3.10
-conda activate shortest-paths-nn
+conda create -n spnn-asilomar python=3.11
+conda activate spnn-asilomar
 
-# Install PyTorch 2.4.0 
-uv pip install "torch==2.4.0" "torchvision" "torchaudio==2.4.0"
+# Install PyTorch
+uv pip install "torch==2.5.1"
 
 # Install PyTorch Geometric dependencies
-TORCH_VERSION=$(python -c "import torch; print(torch.__version__.split('+')[0])")
-echo "TORCH_VERSION: ${TORCH_VERSION}"
-uv pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f "https://data.pyg.org/whl/torch-${TORCH_VERSION}+cpu.html"
+uv pip install torch_scatter torch_sparse -f "https://data.pyg.org/whl/torch-2.5.1+cpu.html"
 
-# Install PyTorch Geometric
-uv pip install torch-geometric
-
-# Other dependencies
-uv pip install -r requirements.txt
+# Install PyTorch Geometric and the other dependencies
+uv pip install "torch-geometric==2.6.1" -r requirements.txt
+uv pip install -e ".[dev]"
 ```
 
-After setup, you can run first-stage single-terrain training with:
+Check the setup with the test suite. The SparseGT tests need MKL, so they skip on Mac.
 
-`./run-experiment-1-terrain.sh experiment-configs/new-MLP-test/GNN+MLP-real.yml debug --new`
+`pytest tests -q`
+
+After setup, you can run single-stage training with `python -m spnn.cli.train`.
+See the "Asilomar branch: quick start" section of `README.md` for the flags.

@@ -79,7 +79,6 @@ def construct_nx_graph(xv, yv, elevation, triangles=False, p=2, scale=False):
     counts = np.reshape(np.arange(0, n*m), (n, m))
     G = nx.Graph()
 
-    print(triangles)
 
     node_features = []
     #fig = plt.figure()
@@ -106,7 +105,6 @@ def construct_nx_graph(xv, yv, elevation, triangles=False, p=2, scale=False):
                 G.add_edge(idx1, idx2, weight=w)
     print("Number of nodes:", len(node_features))
     print("Number of edges:", G.number_of_edges())
-    print(G.edges(0))
     return G, node_features
 
 
