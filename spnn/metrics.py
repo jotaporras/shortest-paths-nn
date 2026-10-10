@@ -45,7 +45,8 @@ def compute_metrics(embedding_module, mlp, dataloader, graph_data, device,
     total_loss = 0.0
     total_mse = 0.0
     total_mae = 0.0
-    total_nmae = 0.0
+    total_nmae = 0.0  # sum of per-pair nmae over pairs with a non-zero length
+    total_nonzero = 0
     total_acc_1pct = 0
     total_acc_2pct = 0
     total_acc_5pct = 0
@@ -81,7 +82,6 @@ def compute_metrics(embedding_module, mlp, dataloader, graph_data, device,
         total_loss += batch_loss * batch_size
         total_mse += batch_mse * batch_size
         total_mae += batch_mae * batch_size
-        total_nmae += batch_nmae * batch_size
         total_samples += batch_size
 
         # Log per-batch metrics if requested
@@ -95,10 +95,17 @@ def compute_metrics(embedding_module, mlp, dataloader, graph_data, device,
 
         pred_mses = torch.square(pred - lengths)
         pred_maes = torch.abs(pred - lengths)
-        pred_nmaes = torch.abs(pred - lengths) / lengths
-        total_acc_1pct += (pred_nmaes < 0.01).sum().item()
-        total_acc_2pct += (pred_nmaes < 0.02).sum().item()
-        total_acc_5pct += (pred_nmaes < 0.05).sum().item()
+        # Relative error is undefined for zero-length (src == tar) pairs: NaN in
+        # preds.csv, and left out of nmae and the acc_* fractions.
+        nonzero = lengths != 0
+        pred_nmaes = torch.where(nonzero, torch.abs(pred - lengths) / lengths,
+                                 torch.full_like(lengths, float('nan')))
+        nz_nmaes = pred_nmaes[nonzero]
+        total_nmae += nz_nmaes.sum().item()
+        total_nonzero += nonzero.sum().item()
+        total_acc_1pct += (nz_nmaes < 0.01).sum().item()
+        total_acc_2pct += (nz_nmaes < 0.02).sum().item()
+        total_acc_5pct += (nz_nmaes < 0.05).sum().item()
         # Generate predictions 
         result = (srcs.cpu().numpy(), 
                   tars.cpu().numpy(), 
@@ -123,9 +130,9 @@ def compute_metrics(embedding_module, mlp, dataloader, graph_data, device,
         'loss': total_loss / total_samples,
         'mse': total_mse / total_samples,
         'mae': total_mae / total_samples,
-        'nmae': total_nmae / total_samples,
-        'acc_1pct': total_acc_1pct / total_samples,
-        'acc_2pct': total_acc_2pct / total_samples,
-        'acc_5pct': total_acc_5pct / total_samples,
+        'nmae': total_nmae / total_nonzero if total_nonzero else float('nan'),
+        'acc_1pct': total_acc_1pct / total_nonzero if total_nonzero else float('nan'),
+        'acc_2pct': total_acc_2pct / total_nonzero if total_nonzero else float('nan'),
+        'acc_5pct': total_acc_5pct / total_nonzero if total_nonzero else float('nan'),
         'all_preds_df': all_preds_df,
     }

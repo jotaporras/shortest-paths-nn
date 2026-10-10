@@ -1,4 +1,5 @@
 """Loss functions, model construction and forward passes."""
+import numpy as np
 import pytest
 import torch
 from torch_geometric.data import Data
@@ -97,3 +98,21 @@ def test_compute_metrics_with_single_pair():
     df = metrics["all_preds_df"]
     assert df.shape == (1, 7)
     assert (df["srcs"].iloc[0], df["tars"].iloc[0], df["lengths"].iloc[0]) == (0, 5, 1.0)
+
+
+def test_compute_metrics_skips_zero_length_pairs():
+    # A src == tar pair (length 0) has no relative error: NaN in the table, and it
+    # does not count in nmae or the acc_* denominators. A batch of only such pairs
+    # must not turn nmae into NaN.
+    model = configure_embedding_module(GNN_CONFIG, "TAGConv")
+    graph = tiny_graph()
+    srcs, tars = torch.tensor([0, 3, 1], dtype=torch.int), torch.tensor([0, 5, 7], dtype=torch.int)
+    lengths = torch.tensor([0.0, 1.0, 2.0])
+    loader = torch.utils.data.DataLoader(SingleGraphShortestPathDataset(srcs, tars, lengths), batch_size=1)
+    metrics = compute_metrics(model, None, loader, graph, "cpu", "TAGConv", True, 4, "mse_loss")
+    df = metrics["all_preds_df"]
+    assert np.isnan(df["pred_nmaes"].iloc[0])
+    expected = df["pred_nmaes"].iloc[1:].mean()
+    assert metrics["nmae"] == pytest.approx(expected)
+    acc = (df["pred_nmaes"].iloc[1:] < 0.05).mean()
+    assert metrics["acc_5pct"] == pytest.approx(acc)
