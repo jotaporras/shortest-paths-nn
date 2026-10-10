@@ -135,4 +135,37 @@ def compute_metrics(embedding_module, mlp, dataloader, graph_data, device,
         'acc_2pct': total_acc_2pct / total_nonzero if total_nonzero else float('nan'),
         'acc_5pct': total_acc_5pct / total_nonzero if total_nonzero else float('nan'),
         'all_preds_df': all_preds_df,
+        'num_pairs': total_samples,
+        'num_nonzero': total_nonzero,
     }
+
+
+def evaluate(embedding_module, mlp, dictionary, device, layer_type, siamese, p, loss_func,
+             tqdm_prefix, **kwargs):
+    """compute_metrics over every graph of a {'graphs', 'dataloaders'} dictionary.
+
+    loss, mse and mae are averaged over all pairs; nmae and acc_* over all
+    pairs with a non-zero length. With several graphs, all_preds_df gets a
+    'graph' column.
+    """
+    per_graph = []
+    for i, (graph, dataloader) in enumerate(zip(dictionary['graphs'], dictionary['dataloaders'])):
+        per_graph.append(compute_metrics(
+            embedding_module, mlp, dataloader, graph.to(device), device, layer_type, siamese,
+            p, loss_func, tqdm_prefix=f"{tqdm_prefix} graph {i}", **kwargs))
+    if len(per_graph) == 1:
+        return per_graph[0]
+
+    def mean(key, weight):
+        total = sum(m[weight] for m in per_graph if m[weight])
+        if not total:
+            return float('nan')
+        return sum(m[key] * m[weight] for m in per_graph if m[weight]) / total
+
+    merged = {key: mean(key, 'num_pairs') for key in ('loss', 'mse', 'mae')}
+    merged.update({key: mean(key, 'num_nonzero') for key in ('nmae', 'acc_1pct', 'acc_2pct', 'acc_5pct')})
+    merged['all_preds_df'] = pd.concat(
+        [m['all_preds_df'].assign(graph=i) for i, m in enumerate(per_graph)], ignore_index=True)
+    merged['num_pairs'] = sum(m['num_pairs'] for m in per_graph)
+    merged['num_nonzero'] = sum(m['num_nonzero'] for m in per_graph)
+    return merged

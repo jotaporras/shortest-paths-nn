@@ -12,7 +12,7 @@ from tqdm import tqdm, trange
 
 from .data import materialize_single_graph_batch
 from .losses import LOSSES, mae_loss, mse_loss, nmae_loss
-from .metrics import compute_metrics
+from .metrics import evaluate
 from .models.factory import configure_embedding_module, configure_mlp_module
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -278,11 +278,9 @@ def train_few_cross_terrain_case(train_dictionary,
         
         # Compute validation metrics after each epoch
         if val_dictionary is not None:
-            val_graph_data = val_dictionary['graphs'][0].to(device)
-            val_metrics = compute_metrics(
-                embedding_module, mlp, val_dictionary['dataloaders'][0],
-                val_graph_data, device, layer_type, siamese, p, loss_func, 
-                tqdm_prefix="val"
+            val_metrics = evaluate(
+                embedding_module, mlp, val_dictionary, device, layer_type, siamese, p,
+                loss_func, tqdm_prefix="val"
             )
             cur_val_nmae = val_metrics['nmae']
             if cur_val_nmae < best_val_nmae:
@@ -318,20 +316,18 @@ def train_few_cross_terrain_case(train_dictionary,
         print(f"Restored best model (val_nmae={best_val_nmae:.6f}) for final evaluation")
 
     # Compute final train metrics
-    graph_data = train_dictionary['graphs'][0].to(device)
-    final_train_metrics = compute_metrics(
-        embedding_module, mlp, train_dictionary['dataloaders'][0],
-        graph_data, device, layer_type, siamese, p, loss_func, tqdm_prefix="train"
-    )   
+    final_train_metrics = evaluate(
+        embedding_module, mlp, train_dictionary, device, layer_type, siamese, p,
+        loss_func, tqdm_prefix="train"
+    )
     
     # Compute final test metrics if test data is provided
     final_test_metrics = None
     if test_dictionary is not None:
-        test_graph_data = test_dictionary['graphs'][0].to(device)
-        final_test_metrics = compute_metrics(
-            embedding_module, mlp, test_dictionary['dataloaders'][0],
-            test_graph_data, device, layer_type, siamese, p, loss_func, 
-            tqdm_prefix="test", log_batch_metrics=True, batch_metric_prefix="test_batch_"
+        final_test_metrics = evaluate(
+            embedding_module, mlp, test_dictionary, device, layer_type, siamese, p,
+            loss_func, tqdm_prefix="test", log_batch_metrics=True,
+            batch_metric_prefix="test_batch_"
         )
     
     # Log final metrics (use final_ prefix to distinguish from batch metrics)

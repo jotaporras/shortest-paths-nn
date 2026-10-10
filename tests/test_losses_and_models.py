@@ -7,7 +7,7 @@ from torch_geometric.data import Data
 from conftest import requires_sparse_cpu
 from spnn import losses
 from spnn.data import SingleGraphShortestPathDataset
-from spnn.metrics import compute_metrics
+from spnn.metrics import compute_metrics, evaluate
 from spnn.models.factory import configure_embedding_module, normalize_activation
 from spnn.models.gnn import LAYERS
 
@@ -156,3 +156,22 @@ def test_random_rpearl_is_repeatable_in_eval_only():
     assert torch.equal(model(graph.x, graph.edge_index), first)
     model.train()
     assert not torch.equal(model(graph.x, graph.edge_index), model(graph.x, graph.edge_index))
+
+
+def test_evaluate_combines_every_graph():
+    # Each graph is evaluated; metrics are pair-weighted means, as if one dataset.
+    model = configure_embedding_module(GNN_CONFIG, "TAGConv")
+    graphs = [tiny_graph(seed=0), tiny_graph(seed=1)]
+    datasets = [
+        SingleGraphShortestPathDataset(torch.tensor([0, 1, 2], dtype=torch.int),
+                                       torch.tensor([3, 4, 5], dtype=torch.int), torch.tensor([1.0, 2.0, 3.0])),
+        SingleGraphShortestPathDataset(torch.tensor([6], dtype=torch.int),
+                                       torch.tensor([9], dtype=torch.int), torch.tensor([4.0])),
+    ]
+    loaders = [torch.utils.data.DataLoader(d, batch_size=2) for d in datasets]
+    merged = evaluate(model, None, {"graphs": graphs, "dataloaders": loaders}, "cpu", "TAGConv", True, 4, "mse_loss", "test")
+    per_graph = [compute_metrics(model, None, ld, g, "cpu", "TAGConv", True, 4, "mse_loss") for g, ld in zip(graphs, loaders)]
+    df = merged["all_preds_df"]
+    assert len(df) == 4 and list(df["graph"]) == [0, 0, 0, 1]
+    assert merged["mse"] == pytest.approx((3 * per_graph[0]["mse"] + per_graph[1]["mse"]) / 4)
+    assert merged["nmae"] == pytest.approx(df["pred_nmaes"].mean())
