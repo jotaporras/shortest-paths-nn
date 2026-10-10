@@ -73,8 +73,8 @@ def test_mesh_graph_weights(mesh_csvs, scale):
         p1, p2 = np.array(node_idx_dict[u]), np.array(node_idx_dict[v])
         dist = np.linalg.norm(p1 - p2)
         if scale:
-            # Same formula as dataset.py --edge-weight; pass 2 may change it.
-            dist *= 1 + abs(np.arctan(p1[2] - p2[2]) / np.linalg.norm(p2[:2] - p1[:2]))
+            # Same formula as make_dataset --edge-weight.
+            dist *= 1 + np.arctan(abs(p1[2] - p2[2]) / np.linalg.norm(p2[:2] - p1[:2]))
         assert w == pytest.approx(dist, rel=1e-12)
 
 

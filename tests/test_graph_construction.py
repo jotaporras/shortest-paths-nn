@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from conftest import build_terrain_npz, synthetic_dem
-from spnn.graphs.grid import construct_nx_graph, get_dem_xv_yv_
+from spnn.graphs.grid import construct_nx_graph, get_dem_xv_yv_, slope_weighted_length
 
 
 def grid_graph(size, dem_resolution=10.0, edge_weight=False):
@@ -28,14 +28,19 @@ def test_edge_weight_is_3d_euclidean_distance():
         assert weight == pytest.approx(np.linalg.norm(node_features[u] - node_features[v]))
 
 
-def test_edge_weight_flag_uses_current_formula():
-    # Characterizes the current --edge-weight formula, (1 + |arctan(dz) / dxy|) * dist.
-    # The intended formula is probably arctan(dz / dxy); pass 2 decides and updates this test.
+def test_edge_weight_flag_scales_by_slope_angle():
+    # --edge-weight: (1 + arctan(|dz| / dxy)) * dist, the slope angle in radians.
     graph, node_features = grid_graph(5, edge_weight=True)
     for u, v, weight in graph.edges(data="weight"):
         p1, p2 = node_features[u], node_features[v]
-        angle = np.abs(np.arctan(p1[2] - p2[2]) / np.linalg.norm(p2[:2] - p1[:2]))
+        angle = np.arctan(abs(p1[2] - p2[2]) / np.linalg.norm(p2[:2] - p1[:2]))
+        assert 0 <= angle < np.pi / 2
         assert weight == pytest.approx((1 + angle) * np.linalg.norm(p1 - p2))
+
+
+def test_slope_weight_of_a_45_degree_edge():
+    p1, p2 = np.array([0.0, 0.0, 0.0]), np.array([3.0, 4.0, 5.0])
+    assert slope_weighted_length(p1, p2) == pytest.approx((1 + np.pi / 4) * np.sqrt(50))
 
 
 def test_npz_format_and_lengths_match_dijkstra(tmp_path):

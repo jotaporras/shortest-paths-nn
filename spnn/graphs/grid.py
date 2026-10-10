@@ -71,6 +71,16 @@ def get_array_neighbors_(x, y, left=0, right=500, radius=1):
     return neighbors
 
 # External use ok
+def slope_weighted_length(p1, p2, ord=2):
+    """Edge length scaled by (1 + slope angle): (1 + arctan(|dz| / dxy)) * ||p1 - p2||.
+
+    The angle is in radians, so the factor is between 1 and 1 + pi/2.
+    """
+    dxy = np.linalg.norm(p2[:2] - p1[:2], ord=2)
+    angle_of_elevation = np.arctan(np.abs(p1[2] - p2[2]) / dxy)
+    return (1 + angle_of_elevation) * np.linalg.norm(p1 - p2, ord=ord)
+
+
 def construct_nx_graph(xv, yv, elevation, triangles=False, p=2, scale=False):
     
     n = elevation.shape[0]
@@ -92,14 +102,7 @@ def construct_nx_graph(xv, yv, elevation, triangles=False, p=2, scale=False):
             for neighbor in neighbors:
                 p1 = np.array([xv[i, j], yv[i, j], elevation[i, j]])
                 p2 = np.array([xv[neighbor[0], neighbor[1]], yv[neighbor[0], neighbor[1]], elevation[neighbor[0], neighbor[1]]])
-                if scale:
-                    # Unused draw, kept because it advances np.random (pass 2: remove).
-                    val = abs(np.random.normal(1.0, 1.0))
-                    angle_of_elevation = np.abs(np.arctan(p1[2] - p2[2])/np.linalg.norm(p2[:2] - p1[:2], ord=2))
-                    val = angle_of_elevation
-                    w = (1 + val) * np.linalg.norm(p1 - p2, ord=p)
-                else:
-                    w = np.linalg.norm(p1 - p2, ord=p)
+                w = slope_weighted_length(p1, p2, ord=p) if scale else np.linalg.norm(p1 - p2, ord=p)
                 #ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]], color='black')
                 idx2 = counts[neighbor[0], neighbor[1]]
                 G.add_edge(idx1, idx2, weight=w)

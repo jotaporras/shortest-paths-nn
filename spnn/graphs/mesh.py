@@ -5,6 +5,8 @@ import networkx as nx
 import numpy as np
 from tqdm import tqdm
 
+from .grid import slope_weighted_length
+
 
 def mesh_to_graph(edge_filename, vertex_filename):
     f = open(edge_filename)
@@ -81,12 +83,7 @@ def construct_mesh_graph(edges, node_mappings, scale=False):
         idx2 = int(edge[1])
         p1 = np.array(node_mappings[idx1])
         p2 = np.array(node_mappings[idx2])
-        if scale:
-            angle_of_elevation = np.abs(np.arctan(p1[2] - p2[2])/np.linalg.norm(p2[:2] - p1[:2], ord=2))
-            val = angle_of_elevation
-            w = (1 + val) * np.linalg.norm(p1 - p2, ord=2)
-        else: 
-            w = np.linalg.norm(p1 - p2, ord=2)
+        w = slope_weighted_length(p1, p2) if scale else np.linalg.norm(p1 - p2, ord=2)
         G.add_edge(idx1, idx2, weight=w)
     print("Number of nodes:", G.number_of_nodes())
     print("Number of edges:", G.number_of_edges())
