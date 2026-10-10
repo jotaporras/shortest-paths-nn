@@ -138,3 +138,21 @@ def test_compute_metrics_skips_zero_length_pairs():
     assert metrics["nmae"] == pytest.approx(expected)
     acc = (df["pred_nmaes"].iloc[1:] < 0.05).mean()
     assert metrics["acc_5pct"] == pytest.approx(acc)
+
+
+@requires_sparse_cpu
+def test_random_rpearl_is_repeatable_in_eval_only():
+    config = {**GNN_CONFIG, "sparse_gt": {
+        "hidden_dim": 8, "num_layers": 1, "num_heads": 2, "num_hops": 2,
+        "rpearl_samples": 3, "rpearl_num_layers": 2, "pe_k": 2,
+        "dropout": 0.0, "attn_dropout": 0.0, "embedding_mode": "random"}}
+    torch.manual_seed(0)
+    model = configure_embedding_module(config, "SparseGT")
+    graph = tiny_graph()
+    model.eval()
+    state = torch.get_rng_state()
+    first = model(graph.x, graph.edge_index)
+    assert torch.equal(torch.get_rng_state(), state), "eval must not consume the global RNG"
+    assert torch.equal(model(graph.x, graph.edge_index), first)
+    model.train()
+    assert not torch.equal(model(graph.x, graph.edge_index), model(graph.x, graph.edge_index))

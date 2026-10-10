@@ -124,13 +124,18 @@ class RandomGNNPositionalEncodings(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.batch_norm = nn.BatchNorm1d(d_model)
         self.M = num_samples
+        self.eval_seed = 0
 
     def forward(self, data):
         X, edge_index = data.x, data.edge_index
 
-        # Generate random node embeddings for positional encoding
+        # Random node inputs: fresh draws in training. In eval mode a fixed-seed
+        # generator makes encodings repeatable and leaves the global RNG alone.
         num_nodes = X.shape[0]
-        Q = torch.randn((num_nodes, self.M), device=X.device, dtype=X.dtype)
+        generator = None
+        if not self.training:
+            generator = torch.Generator(device=X.device).manual_seed(self.eval_seed)
+        Q = torch.randn((num_nodes, self.M), device=X.device, dtype=X.dtype, generator=generator)
 
         # Process random embeddings individually through GCN
         P_m = []
