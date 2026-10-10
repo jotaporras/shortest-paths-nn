@@ -8,6 +8,7 @@ from spnn import losses
 from spnn.data import SingleGraphShortestPathDataset
 from spnn.metrics import compute_metrics
 from spnn.models.factory import configure_embedding_module, normalize_activation
+from spnn.models.gnn import LAYERS
 
 
 def test_basic_losses():
@@ -38,11 +39,7 @@ GNN_CONFIG = {"constr": {"input": 3, "hidden": 8, "output": 6, "layers": 2},
               "layer_norm": False, "dropout": True, "activation": "lrelu"}
 
 
-@pytest.mark.parametrize("layer_type", [
-    "TAGConv", "GCNConv", "GATConv", "TransformerConv", "GATv2Conv",
-    pytest.param("GINConv", marks=pytest.mark.xfail(
-        strict=True, raises=TypeError, reason="pass 2: create_graph_layer passes ints where GINConv needs an nn module")),
-])
+@pytest.mark.parametrize("layer_type", sorted(LAYERS))
 def test_gnn_model_forward(layer_type):
     model = configure_embedding_module(GNN_CONFIG, layer_type, edge_dim=1)
     graph = tiny_graph()

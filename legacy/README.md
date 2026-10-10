@@ -34,6 +34,7 @@ Usefulness for the Asilomar study:
 | `models.py` | Other backbones: dense graph transformer, Exphormer, LINKX, Laplacian PEs. Imports modules that are not in this repo. | Unlikely. |
 | `sparse_gt.py` | Older copy of the SparseGT code. Imports `manifold_transformers`. The live copy is `src/custom_models.py`. | Unlikely. |
 | `utils.py` | Model loading, embedding helpers, `generate_test_dataset` (Dijkstra from random sources, drops zero-length pairs, optional distance cutoff), `get_highest_points_per_patch`. | Maybe useful: the two sampling helpers. |
+| `gnn_layers_broken.py` | GNN layer types removed from `spnn/models/gnn.py` because they did not run in `GNNModel`: `GCNLayer`, `GeneralConv{Max,Min,Multi}Attention`, `CNNLayer`. | Unlikely. |
 | `transforms.py` | Laplacian positional encoding and virtual-node transforms. The live code imported them but never called them. | Unlikely. |
 
 ## phase2/ — decoupled MLP finetune (Phase 2)
