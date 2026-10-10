@@ -32,17 +32,26 @@ def main():
     dem_res = DATASET_INFO[args.name][0]
     imperial = DATASET_INFO[args.name][1]
     if 'meshes' in args.raw_data:
+        # Critical points are found on the DEM grid, so they need rows and cols.
+        if 'critical-point' in args.sampling_technique:
+            parser.error(f"--sampling-technique {args.sampling_technique} needs a DEM grid, not a mesh")
         edge_filename = os.path.join(args.raw_data, 'percent_edges')
         vertex_filename = os.path.join(args.raw_data, 'percent_vertices')
         G, node_features = mesh_to_graph(edge_filename, vertex_filename)
+        construct_dataset(G=G,
+                          node_features=node_features,
+                          filename=args.filename,
+                          num_srcs=args.num_sources,
+                          samples_per_source=args.dataset_size // args.num_sources,
+                          sampling_method=args.sampling_technique,
+                          threshhold=args.critical_point_threshhold,
+                          mixture=args.mixture_param)
     else:
         if args.name == 'la' or args.name == 'artificial':
             dem_array = np.load(args.raw_data)
         else:
             dem_array = load_dem_data_(args.raw_data, imperial)
         xv, yv, elevations = get_dem_xv_yv_(dem_array, dem_res)
-        # Unused draw, kept because it advances np.random (pass 2: remove).
-        row,col = np.random.choice(elevations.shape[0], size=[2,])
         res = args.graph_resolution
         
         filename = args.filename

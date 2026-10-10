@@ -135,3 +135,25 @@ def test_simplified_mesh_dataset_golden(tmp_path, update_golden):
     }
     check_golden("mesh_simplified", observed, update_golden,
                  float_keys=("lengths_sum", "distances_sum"), rel=1e-9)
+
+
+def test_make_dataset_cli_mesh_branch(tmp_path, monkeypatch):
+    # A --raw-data path containing "meshes" reads percent_edges / percent_vertices.
+    from spnn.cli import make_dataset
+
+    mesh_dir = tmp_path / "meshes"
+    mesh_dir.mkdir()
+    n = 4  # 4x4 grid of vertices, edges between horizontal and vertical neighbours
+    (mesh_dir / "percent_vertices").write_text(
+        "".join(f"{1000 * (i % n)} {1000 * (i // n)} {100 * (i % 3)}\n" for i in range(n * n)))
+    edges = [(i, i + 1) for i in range(n * n) if i % n < n - 1] + [(i, i + n) for i in range(n * n - n)]
+    (mesh_dir / "percent_edges").write_text("".join(f"{u} {v}\n" for u, v in edges))
+    out = tmp_path / "mesh.npz"
+    monkeypatch.setattr("sys.argv", [
+        "make_dataset", "--name", "norway", "--raw-data", str(mesh_dir), "--filename", str(out),
+        "--dataset-size", "12", "--num-sources", "3", "--sampling-technique", "single-source-random"])
+    np.random.seed(0)
+    make_dataset.main()
+    data = np.load(out)
+    assert len(data["node_features"]) == n * n
+    assert len(data["srcs"]) == len(data["lengths"]) == 12
