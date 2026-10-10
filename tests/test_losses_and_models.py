@@ -89,13 +89,14 @@ def test_sparse_gt_forward(mode):
     assert torch.isfinite(out).all()
 
 
-def test_compute_metrics_with_single_pair_crashes():
-    # pass 2: `.squeeze()` at spnn/metrics.py:113 collapses the (7, 1)
-    # predictions array when a dataloader holds exactly one pair.
+def test_compute_metrics_with_single_pair():
+    # A dataloader with exactly one pair gives a one-row predictions table.
     model = configure_embedding_module(GNN_CONFIG, "TAGConv")
     graph = tiny_graph()
     dataset = SingleGraphShortestPathDataset(
         torch.tensor([0], dtype=torch.int), torch.tensor([5], dtype=torch.int), torch.tensor([1.0]))
     loader = torch.utils.data.DataLoader(dataset, batch_size=4)
-    with pytest.raises(ValueError, match="Shape of passed values"):
-        compute_metrics(model, None, loader, graph, "cpu", "TAGConv", True, 4, "mse_loss")
+    metrics = compute_metrics(model, None, loader, graph, "cpu", "TAGConv", True, 4, "mse_loss")
+    df = metrics["all_preds_df"]
+    assert df.shape == (1, 7)
+    assert (df["srcs"].iloc[0], df["tars"].iloc[0], df["lengths"].iloc[0]) == (0, 5, 1.0)

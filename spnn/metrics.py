@@ -110,7 +110,8 @@ def compute_metrics(embedding_module, mlp, dataloader, graph_data, device,
         )
         pred_results.append(result)
     
-    all_preds = np.array([np.concatenate(batch_results) for batch_results in zip(*pred_results)]).squeeze().T # (B*BS, 8)
+    # One column per field; reshape(-1) instead of squeeze() keeps a single pair as one row.
+    all_preds = np.stack([np.concatenate(batch_results).reshape(-1) for batch_results in zip(*pred_results)], axis=1)  # (N, 7)
     all_preds_df = pd.DataFrame(all_preds, columns=['srcs', 'tars', 'preds', 'lengths', 'pred_mses', 'pred_maes', 'pred_nmaes'])
 
     
