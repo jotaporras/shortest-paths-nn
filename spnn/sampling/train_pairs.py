@@ -55,7 +55,7 @@ def construct_dataset(G,
         For shortest paths, sample random target nodes from across the terrain
         """
         node_features = np.array(node_features)
-        terrain = reshape_node_features_grid(node_features, row, cols)  # noqa: F821 (pass 2: `row` is undefined)
+        terrain = reshape_node_features_grid(node_features, rows, cols)
         src_nodes = find_critical_points(terrain, threshhold)
         src_sampling_fn_pairs = [(src_nodes, random_sampling)]
 

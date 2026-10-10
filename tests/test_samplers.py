@@ -108,8 +108,10 @@ def test_construct_dataset_golden(tmp_path, method, update_golden):
     assert observed["distances_sum"] == pytest.approx(golden["distances_sum"], rel=1e-12)
 
 
-def test_critical_point_source_crashes(tmp_path):
-    # pass 2: construct_dataset uses an undefined `row` in this branch (dataset.py:210)
-    with pytest.raises(NameError):
-        build_terrain_npz(tmp_path / "c.npz", size=SIZE, dem_resolution=10.0, seed=0,
-                          num_srcs=4, samples_per_source=4, sampling_method="critical-point-source")
+def test_critical_point_source_uses_critical_points(tmp_path):
+    path = build_terrain_npz(tmp_path / "c.npz", size=30, dem_resolution=10.0, seed=0,
+                             num_srcs=4, samples_per_source=4, sampling_method="critical-point-source")
+    data = np.load(path)
+    assert len(data["srcs"]) == len(data["tars"]) == len(data["lengths"]) > 0
+    assert (data["srcs"] < len(data["node_features"])).all()
+    assert np.isfinite(data["lengths"]).all()
