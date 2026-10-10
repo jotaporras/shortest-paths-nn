@@ -28,24 +28,19 @@ def test_leaves_tile_the_array():
     assert (covered == 1).all()
 
 
-def test_leaf_bounds_index_the_transposed_array():
-    """Current behaviour: leaf (lb, rb) is a column range and (ub, db) a row range."""
-    arr = synthetic_dem(8, 0) / 1000
-    thresh = 0.05
-    for lb, rb, ub, db in leaves(quadtree.build_quadtree(arr, thresh=thresh)):
-        block = arr.T[lb:rb, ub:db]
-        assert block.size <= 1 or np.ptp(block) <= thresh
-
-
-@pytest.mark.xfail(strict=True, reason="pass 2: build_dem_qt_ swaps the bounds of q2/q4, "
-                                       "so (lb, rb) are columns, while quadtree_simplification "
-                                       "reads them as rows")
-def test_leaf_bounds_index_the_array_rows_first():
-    arr = synthetic_dem(8, 0) / 1000
-    thresh = 0.05
+@pytest.mark.parametrize("arr,thresh", [
+    (synthetic_dem(8, 0) / 1000, 0.05),
+    (np.add.outer(np.arange(9.0), np.zeros(9)), 2.0),  # varies along rows only
+    (np.add.outer(np.zeros(12), np.arange(7.0)), 2.0),  # non-square, varies along columns only
+])
+def test_leaf_bounds_index_the_array_rows_first(arr, thresh):
+    # Leaf data is (row start, row end, col start, col end); each leaf block is flat enough.
+    covered = np.zeros(arr.shape, dtype=int)
     for lb, rb, ub, db in leaves(quadtree.build_quadtree(arr, thresh=thresh)):
         block = arr[lb:rb, ub:db]
+        covered[lb:rb, ub:db] += 1
         assert block.size <= 1 or np.ptp(block) <= thresh
+    assert (covered == 1).all()
 
 
 @pytest.mark.parametrize("size,thresh", [(8, 0.05), (9, 0.02)])

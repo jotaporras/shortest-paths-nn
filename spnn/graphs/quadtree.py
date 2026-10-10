@@ -35,9 +35,10 @@ def build_dem_qt_(array, lb, rb, ub, db, tree, parent, thresh=0.10):
     # if any of the quadrants have too large of a difference between min and max
     # split it again along some midpoint
     build_dem_qt_(q1, lb, lb + mid_row, ub, ub + mid_col, tree, node_id, thresh=thresh)
-    build_dem_qt_(q2, lb + mid_row, rb, ub, ub + mid_col, tree, node_id, thresh=thresh)
+    # Bounds are (row start, row end, col start, col end) of each quadrant.
+    build_dem_qt_(q2, lb, lb + mid_row, ub + mid_col, db, tree, node_id, thresh=thresh)
     build_dem_qt_(q3, lb + mid_row, rb, ub + mid_col, db, tree, node_id, thresh=thresh)
-    build_dem_qt_(q4, lb, lb + mid_row, ub + mid_col, db, tree, node_id, thresh=thresh)
+    build_dem_qt_(q4, lb + mid_row, rb, ub, ub + mid_col, tree, node_id, thresh=thresh)
     
 # parameters: array, threshhold value
 # return: treelib.Tree object
