@@ -196,6 +196,7 @@ def train(preset_name):
         single_graph_full_batch=True,
         test_dictionary=test_dictionary,
         val_dictionary=val_dictionary,
+        seed=cfg.get("seed", 0),
         **extra,
     )
 

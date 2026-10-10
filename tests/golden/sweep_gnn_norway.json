@@ -61,6 +61,7 @@
   "new": true,
   "p": 4,
   "run_name": "sweep-TAGConv-res03",
+  "seed": 0,
   "siamese": true,
   "single_graph_full_batch": true,
   "wandb_config": {

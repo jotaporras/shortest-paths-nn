@@ -72,6 +72,7 @@
   "new": true,
   "p": 4,
   "run_name": "sweep-SparseGT-data-res10",
+  "seed": 0,
   "siamese": true,
   "single_graph_full_batch": true,
   "wandb_config": {

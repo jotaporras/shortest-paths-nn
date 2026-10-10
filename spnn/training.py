@@ -4,6 +4,7 @@ import logging
 import os
 from pathlib import Path
 
+import numpy as np
 import torch
 import wandb
 from torch.optim import AdamW
@@ -67,10 +68,13 @@ def train_few_cross_terrain_case(train_dictionary,
                                 single_graph_full_batch=False,
                                 test_dictionary=None,
                                 val_dictionary=None,
-                                early_stopping_patience=None):
+                                early_stopping_patience=None,
+                                seed=0):
     if base_log_dir is None:
         base_log_dir = str(output_dir())
-    torch.manual_seed(0)
+    # Seeds model init, dataloader shuffling and RPEARL random features.
+    torch.manual_seed(seed)
+    np.random.seed(seed)
     num_graphs = len(train_dictionary['graphs'])
     edge_dim = 1
     embedding_config = model_config['gnn']
@@ -99,6 +103,7 @@ def train_few_cross_terrain_case(train_dictionary,
 
     # Build wandb config with all relevant parameters
     base_config = {
+        "seed": seed,
         "learning_rate": lr,
         "epochs": epochs,
         "siamese": siamese,

@@ -45,6 +45,8 @@ def main():
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--layer-type', type=str)
     parser.add_argument('--trial', type=str)
+    parser.add_argument('--seed', type=int, default=None,
+                        help='Random seed (default: --trial if it is an integer, else 0)')
     parser.add_argument('--p', type=int, default=1 )
     parser.add_argument('--finetune', type=int, default=0)
     parser.add_argument('--include-edge-attr', type=int, default=0)
@@ -72,6 +74,10 @@ def main():
     finetune=True if args.finetune == 1 else False
     finetune_from=None if args.finetune_from == 'none' else args.finetune_from
     trial = args.trial
+    if args.seed is not None:
+        seed = args.seed
+    else:
+        seed = int(trial) if trial is not None and trial.isdigit() else 0
 
     with open(args.config, 'r') as file:
         model_configs = yaml.safe_load(file)
@@ -182,6 +188,7 @@ def main():
             )
             
             train_few_cross_terrain_case(train_dictionary=train_dictionary,
+                                        seed = seed,
                                         model_config = config,
                                         layer_type = args.layer_type,
                                         device = args.device,
