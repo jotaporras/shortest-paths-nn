@@ -23,7 +23,8 @@ import pandas as pd
 MODELS = ("tagconv", "sgt_random", "sgt_data")
 METRIC_PREFIXES = ("final_train_", "test_", "best_val_nmae")
 # model -> (rtol for continuous metrics and preds.csv, atol for acc_* fractions)
-TOLERANCES = {"tagconv": (0.0, 0.0), "sgt_random": (2e-3, 2.5e-3), "sgt_data": (2e-3, 2.5e-3)}
+# SparseGT values: same code on a shared plaza GPU differed by up to 4.4e-3 (rel) and 2.5e-3 (acc).
+TOLERANCES = {"tagconv": (0.0, 0.0), "sgt_random": (1e-2, 5e-3), "sgt_data": (1e-2, 5e-3)}
 
 
 def load_summary(out_dir: Path, model: str) -> dict:

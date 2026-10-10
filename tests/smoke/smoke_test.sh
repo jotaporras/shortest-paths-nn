@@ -3,11 +3,13 @@
 #   models: TAGConv, SparseGT (RPEARL random), SparseGT (RPEARL data)
 #   train:  <fixture_dir>/smoke_train.npz    test: <fixture_dir>/smoke_test.npz
 # Each model writes <out_dir>/<model>.json (metrics), <out_dir>/<model>/ (preds.csv,
-# final_model.pt, offline wandb run) and <out_dir>/<model>.log. Compare two out
+# final_model.pt, wandb files) and <out_dir>/<model>.log. Compare two out
 # dirs with tests/smoke/compare_runs.py.
 #
 # Usage: bash tests/smoke/smoke_test.sh <fixture_dir> <out_dir> [device]
-#   env: PYTHON (default: python), EPOCHS (default: 5)
+#   env: PYTHON (default: python), EPOCHS (default: 5),
+#        WANDB_PROJECT (default: manifold-transformers-dev), WANDB_MODE (default: online)
+# Runs are tagged "smoke" and "smoke-<out_dir name>" in wandb.
 set -euo pipefail
 
 FIX=$(cd "$1" && pwd)
@@ -18,7 +20,10 @@ PYTHON=${PYTHON:-python}
 EPOCHS=${EPOCHS:-5}
 
 cd "$(dirname "$0")/../.."
-export WANDB_MODE=offline
+export WANDB_MODE=${WANDB_MODE:-online}
+export WANDB_ENTITY=${WANDB_ENTITY:-alelab}
+export WANDB_PROJECT=${WANDB_PROJECT:-manifold-transformers-dev}
+LABEL=$(basename "$OUT")
 # Record which code ran: git state, or the .sync_commit file written when the
 # tree was copied to this machine without its .git directory.
 if git rev-parse HEAD > "$OUT/commit.txt" 2>/dev/null; then
@@ -51,6 +56,7 @@ run_model() {
     --new \
     --single-graph-full-batch \
     --run-name "smoke-$name" \
+    --wandb-tag smoke "smoke-$LABEL" \
     "$@" > "$OUT/$name.log" 2>&1
   echo "$name $((SECONDS - start))s" | tee -a "$OUT/timing.txt"
 }
