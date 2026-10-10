@@ -57,8 +57,8 @@ def test_sampler_is_deterministic_under_seed(grid, name):
 
 
 @pytest.mark.parametrize("name", [
-    pytest.param("random_sampling", marks=pytest.mark.xfail(strict=True, reason="pass 2: can pick src as target")),
-    pytest.param("distance_based", marks=pytest.mark.xfail(strict=True, reason="pass 2: can pick src as target")),
+    "random_sampling",
+    "distance_based",
     "proximity_variance_sampling",
     "hybrid_sampling",
 ])
