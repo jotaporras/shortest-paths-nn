@@ -35,10 +35,10 @@ def load_dem_data_(filename, imperial=False):
 # Get DEM array xloc and yloc
 # outputs all relevant values in km
 def get_dem_xv_yv_(arr, resolution, visualize=True):
-    sz = arr.shape[0]
-    total_width = resolution * sz
-    x = np.linspace(0, total_width, sz)
-    y = np.linspace(0, total_width, sz)
+    # x runs along columns and y along rows, so xv, yv have arr's (rows, cols) shape.
+    rows, cols = arr.shape[:2]
+    x = np.linspace(0, resolution * cols, cols)
+    y = np.linspace(0, resolution * rows, rows)
     xv, yv = np.meshgrid(x, y)
     if visualize == True:
         plt.contourf(xv/1000, yv/1000, arr/1000)
@@ -51,7 +51,9 @@ def get_dem_xv_yv_(arr, resolution, visualize=True):
 
     
 # Construct grid with both cross edges
-def get_array_neighbors_(x, y, left=0, right=500, radius=1):
+def get_array_neighbors_(x, y, left=0, right=500, radius=1, top=None):
+    # right bounds x (rows) and top bounds y (cols); top defaults to right.
+    top = right if top is None else top
     temp = [(x - radius, y), 
             (x + radius, y), 
             (x, y - radius), 
@@ -65,7 +67,7 @@ def get_array_neighbors_(x, y, left=0, right=500, radius=1):
     for val in temp:
         if val[0] < left or val[0] >= right:
             neighbors.remove(val)
-        elif val[1] < left or val[1] >= right:
+        elif val[1] < left or val[1] >= top:
             neighbors.remove(val)
 
     return neighbors
@@ -98,7 +100,7 @@ def construct_nx_graph(xv, yv, elevation, triangles=False, p=2, scale=False):
             idx1 = counts[i, j]
             G.add_node(idx1)
             node_features.append(np.array([xv[i, j], yv[i, j], elevation[i, j]]))
-            neighbors = get_array_neighbors_(i, j, right=elevation.shape[0], radius=1)
+            neighbors = get_array_neighbors_(i, j, right=n, top=m, radius=1)
             for neighbor in neighbors:
                 p1 = np.array([xv[i, j], yv[i, j], elevation[i, j]])
                 p2 = np.array([xv[neighbor[0], neighbor[1]], yv[neighbor[0], neighbor[1]], elevation[neighbor[0], neighbor[1]]])
@@ -112,14 +114,15 @@ def construct_nx_graph(xv, yv, elevation, triangles=False, p=2, scale=False):
 
 
 # Construct grid with 4 neighbours; the test-set generator uses this.
-def get_array_neighbors_4_(x, y, left=0, right=500, radius=1):
+def get_array_neighbors_4_(x, y, left=0, right=500, radius=1, top=None):
+    top = right if top is None else top
     temp = [(x - radius, y), (x + radius, y), (x, y - radius), (x, y + radius)]
     neighbors = temp.copy()
 
     for val in temp:
         if val[0] < left or val[0] >= right:
             neighbors.remove(val)
-        elif val[1] < left or val[1] >= right:
+        elif val[1] < left or val[1] >= top:
             neighbors.remove(val)
 
     return neighbors
@@ -143,7 +146,7 @@ def construct_nx_graph_4n(xv, yv, elevation, triangles=False, p=2):
             idx1 = counts[i, j]
             G.add_node(idx1)
             node_features.append(np.array([xv[i, j], yv[i, j], elevation[i, j]]))
-            neighbors = get_array_neighbors_4_(i, j, right=elevation.shape[0], radius=1)
+            neighbors = get_array_neighbors_4_(i, j, right=n, top=m, radius=1)
             for neighbor in neighbors:
                 p1 = np.array([xv[i, j], yv[i, j], elevation[i, j]])
                 p2 = np.array([xv[neighbor[0], neighbor[1]], yv[neighbor[0], neighbor[1]], elevation[neighbor[0], neighbor[1]]])

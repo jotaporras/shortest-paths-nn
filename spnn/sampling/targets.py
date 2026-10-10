@@ -3,7 +3,17 @@ import networkx as nx
 import numpy as np
 
 
-def random_sampling(graph: nx.Graph, samples_per_source, src=None):
+def grid_hops(src, vertices, num_nodes, cols=None):
+    """Manhattan hop count + 1 between grid nodes, with node index = row * cols + col.
+
+    cols=None assumes a square grid (cols = sqrt(num_nodes)).
+    """
+    if cols is None:
+        cols = int(np.around(num_nodes ** 0.5))
+    return abs(src // cols - vertices // cols) + abs(src % cols - vertices % cols) + 1
+
+
+def random_sampling(graph: nx.Graph, samples_per_source, src=None, cols=None):
     if src is None:
         src = np.random.randint(0, graph.number_of_nodes())
     distance = nx.single_source_dijkstra_path_length(graph, src)
@@ -14,14 +24,13 @@ def random_sampling(graph: nx.Graph, samples_per_source, src=None):
     return [src] * samples_per_source, target.tolist(), distance
 
 
-def distance_based(graph: nx.Graph, samples_per_source, src=None):
+def distance_based(graph: nx.Graph, samples_per_source, src=None, cols=None):
     if src is None:
         src = np.random.randint(0, graph.number_of_nodes())
     distance = nx.single_source_dijkstra_path_length(graph, src)
     # random
     vertices = np.arange(graph.number_of_nodes())
-    row_num = int(np.around(graph.number_of_nodes() ** 0.5))
-    hops = abs(src // row_num - vertices // row_num) + abs(src % row_num - vertices % row_num) + 1
+    hops = grid_hops(src, vertices, graph.number_of_nodes(), cols)
     probs = 1 / hops
     probs[src] = 0  # never the source itself
     probs = probs / probs.sum()
@@ -51,7 +60,8 @@ def compute_altitude_variance(node_features, rows, cols):
 def proximity_variance_sampling(graph: nx.Graph, samples_per_source, src=None,
                                 altitude_variance=None,
                                 proximity_decay=1.0,
-                                variance_boost=2.0):
+                                variance_boost=2.0,
+                                cols=None):
     """Sample targets biased toward nodes that are closer to the source
     (grid-Manhattan proximity) and located in regions of high elevation
     gradient.
@@ -65,10 +75,7 @@ def proximity_variance_sampling(graph: nx.Graph, samples_per_source, src=None,
 
     N = graph.number_of_nodes()
     vertices = np.arange(N)
-    row_num = int(np.around(N ** 0.5))
-
-    hops = (abs(src // row_num - vertices // row_num)
-            + abs(src % row_num - vertices % row_num) + 1)
+    hops = grid_hops(src, vertices, N, cols)
     proximity_w = 1.0 / (hops ** proximity_decay)
 
     if altitude_variance is not None:
@@ -88,7 +95,8 @@ def proximity_variance_sampling(graph: nx.Graph, samples_per_source, src=None,
 
 def hybrid_sampling(graph: nx.Graph, samples_per_source, src=None,
                     altitude_variance=None,
-                    proximity_decay=1.0):
+                    proximity_decay=1.0,
+                    cols=None):
     """Sample targets: half uniformly, half biased toward nearby nodes."""
     if src is None:
         src = np.random.randint(0, graph.number_of_nodes())
@@ -104,9 +112,7 @@ def hybrid_sampling(graph: nx.Graph, samples_per_source, src=None,
     chosen_uniform = np.random.choice(all_others, size=n_uniform, replace=False)
 
     remaining = np.setdiff1d(all_others, chosen_uniform)
-    row_num = int(np.around(N ** 0.5))
-    hops = (abs(src // row_num - remaining // row_num)
-            + abs(src % row_num - remaining % row_num) + 1)
+    hops = grid_hops(src, remaining, N, cols)
     probs = 1.0 / (hops ** proximity_decay)
     probs = probs / probs.sum()
     chosen_proximity = np.random.choice(remaining, size=n_proximity,

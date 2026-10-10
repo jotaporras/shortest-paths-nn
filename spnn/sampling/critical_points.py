@@ -8,8 +8,8 @@ from ripser import lower_star_img
 
 def find_critical_points(terrain, threshold):
     # the original terrain has same-height points we must break the tie
-    N = terrain.shape[0]
-    terrain[:, :, 2] += torch.rand((N, N)) * 1e-5
+    rows, cols = terrain.shape[:2]
+    terrain[:, :, 2] += torch.rand((rows, cols)) * 1e-5
     lower_dgm = lower_star_img(terrain[:, :, 2])
     upper_dgm = - lower_star_img(- terrain[:, :, 2])
     long_pers_lower_dgm = lower_dgm[lower_dgm[:, 1]- lower_dgm[:, 0] > threshold]

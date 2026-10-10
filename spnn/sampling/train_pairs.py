@@ -33,8 +33,8 @@ def construct_dataset(G,
                       sampling_method, 
                       num_srcs, 
                       samples_per_source, 
-                      rows=100, 
-                      cols=100, 
+                      rows=None,
+                      cols=None,
                       threshhold=0.2, 
                       mixture=0.2,
                       morse_points_path=None):
@@ -135,7 +135,7 @@ def construct_dataset(G,
             cp_srcs = np.random.choice(critical_points, size=num_cp, replace=False)
             num_random = num_srcs - num_cp
         random_points = np.random.choice(len(node_features), size=num_random, replace=False)
-        print(len(np.unique(cp_srcs)), len(np.unique(random_sampling)))
+        print(len(np.unique(cp_srcs)), len(np.unique(random_points)))
         src_sampling_fn_pairs = [(cp_srcs, distance_based), (random_points, random_sampling)]
 
     elif sampling_method == 'mountain-ridges':
@@ -219,7 +219,8 @@ def construct_dataset(G,
         src_nodes = pair[0]
         sampling_fn = pair[1]
         for src in tqdm(src_nodes):
-            source, target, length = sampling_fn(G, samples_per_source, src=src)
+            # cols lets the grid samplers find a node's row and column.
+            source, target, length = sampling_fn(G, samples_per_source, src=src, cols=cols)
             srcs += source
             tars += target
             lengths += length

@@ -75,14 +75,14 @@ def quadtree_simplification(tree, num_rows, num_cols):
             graph.add_edge(v1, v2)        
     
     ## prune extraneous edges:
-    for edge in tqdm(graph.edges):
+    for edge in tqdm(list(graph.edges)):
         idx1 = min(edge)
         idx2 = max(edge)
 
-        v1_x = idx1 // num_rows
+        v1_x = idx1 // num_cols
         v1_y = idx1 % num_cols 
 
-        v2_x = idx2 // num_rows
+        v2_x = idx2 // num_cols
         v2_y = idx2 % num_cols
 
         if v1_x == v2_x: 
