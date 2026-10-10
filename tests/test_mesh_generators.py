@@ -122,7 +122,7 @@ def test_mesh_nodes_match_node_features(tmp_path, contiguous):
 
 
 def test_simplified_mesh_dataset_golden(tmp_path, update_golden):
-    """generate_dataset draws a fixed 62,500 random pairs, then splits 80/20."""
+    """generate_dataset keeps distinct unordered pairs, then splits 80/20."""
     ids, coords, edges = tiny_mesh()
     vertex_file = tmp_path / "v.txt"
     np.savetxt(vertex_file, np.column_stack([ids, coords]))
@@ -131,8 +131,11 @@ def test_simplified_mesh_dataset_golden(tmp_path, update_golden):
     np.random.seed(0)
     simplified.generate_dataset(vertex_file, edge_file, str(tmp_path / "m"))
     full, train, test = (np.load(tmp_path / f"m{s}.npz") for s in ("", "_train", "_test"))
-    assert len(full["srcs"]) == 62500
-    assert (len(train["srcs"]), len(test["srcs"])) == (50000, 12500)
+    n = len(ids)
+    assert len(full["srcs"]) == n * (n - 1) // 2  # every pair of the 25-node mesh, once
+    assert (len(train["srcs"]), len(test["srcs"])) == (240, 60)
+    pair = lambda d: {tuple(sorted(p)) for p in zip(d["srcs"].tolist(), d["tars"].tolist())}
+    assert not pair(train) & pair(test), "a pair is in both splits"
     observed = {
         "srcs_digest": array_digest(full["srcs"]),
         "tars_digest": array_digest(full["tars"]),

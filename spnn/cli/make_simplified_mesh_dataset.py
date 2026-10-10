@@ -12,7 +12,11 @@ import networkx as nx
 from sklearn.model_selection import train_test_split
 import argparse
 
-def generate_dataset(vertex_file, edge_file, output_prefix):
+def generate_dataset(vertex_file, edge_file, output_prefix, num_pairs=62500, test_fraction=0.2):
+    """Save num_pairs distinct unordered (src, tar) pairs, then an 80/20 train/test split.
+
+    Pairs are distinct as unordered pairs, so no pair (or its reverse) is in both splits.
+    """
     raw_vertices = np.loadtxt(vertex_file)
     vertex_ids = raw_vertices[:, 0].astype(int)
     coordinates = raw_vertices[:, 1:4]
@@ -46,11 +50,17 @@ def generate_dataset(vertex_file, edge_file, output_prefix):
     tars = []
     lengths = []
     node_indices = list(G.nodes)
+    num_pairs = min(num_pairs, len(node_indices) * (len(node_indices) - 1) // 2)
 
-    TRAIN_SIZE = 50000
-    N = int(TRAIN_SIZE / 0.8)
-    for _ in range(N):
+    seen = set()
+    attempts = 0
+    while len(srcs) < num_pairs and attempts < 10 * num_pairs:
+        attempts += 1
         src, tar = np.random.choice(node_indices, size=2, replace=False)
+        key = (min(src, tar), max(src, tar))
+        if key in seen:
+            continue
+        seen.add(key)
         try:
             length = nx.shortest_path_length(G, source=src, target=tar, weight='weight')
             srcs.append(src)
@@ -74,7 +84,7 @@ def generate_dataset(vertex_file, edge_file, output_prefix):
     print(f"Saved full dataset: {output_prefix}.npz")
 
     srcs_train, srcs_test, tars_train, tars_test, lengths_train, lengths_test = train_test_split(
-        srcs, tars, lengths, test_size=0.2, random_state=42
+        srcs, tars, lengths, test_size=test_fraction, random_state=42
     )
 
     np.savez(f"{output_prefix}_train.npz",
@@ -96,16 +106,18 @@ def generate_dataset(vertex_file, edge_file, output_prefix):
     print(f"Saved:\nTrain -> {output_prefix}_train.npz\nTest  -> {output_prefix}_test.npz")
     print(f"Train size: {len(srcs_train)}, Test size: {len(srcs_test)}")
 
-if __name__ == "__main__":
-    import traceback
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--vertex_file", required=True, help="Path to simplified_vertices.txt")
     parser.add_argument("--edge_file", required=True, help="Path to simplified_edges.txt")
     parser.add_argument("--output_prefix", required=True, help="Prefix for output files")
+    parser.add_argument("--num-pairs", type=int, default=62500, help="Distinct pairs before the split")
+    parser.add_argument("--test-fraction", type=float, default=0.2)
 
     args = parser.parse_args()
-    try:
-        generate_dataset(args.vertex_file, args.edge_file, args.output_prefix)
-    except Exception as e:
-        print("[ERROR] generate_dataset failed:", e)
-        traceback.print_exc()
+    generate_dataset(args.vertex_file, args.edge_file, args.output_prefix,
+                     num_pairs=args.num_pairs, test_fraction=args.test_fraction)
+
+
+if __name__ == "__main__":
+    main()
