@@ -358,6 +358,8 @@ def train_few_cross_terrain_case(train_dictionary,
         logger.info(f'final test loss: {final_test_metrics["loss"]}')
         print("Final test loss:", final_test_metrics['loss'])
     
+    # Per-batch test logs advance wandb's own step; a log at an older step is dropped.
+    global_step = max(global_step, wandb.run.step)
     wandb.log(final_metrics, step=global_step)
     for k, v in final_metrics.items():
         wandb.run.summary[k] = v
