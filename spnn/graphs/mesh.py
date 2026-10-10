@@ -77,14 +77,22 @@ def process_edges(filename):
     return edges
 
 def construct_mesh_graph(edges, node_mappings, scale=False):
+    """Graph whose node i is the i-th vertex of the node file.
+
+    `node_mappings` maps raw vertex ids to coordinates in file order (as
+    process_node_features returns it), so node i matches node_features[i].
+    `edges` holds raw vertex ids.
+    """
+    index_of = {raw_id: i for i, raw_id in enumerate(node_mappings)}
     G = nx.Graph()
+    G.add_nodes_from(range(len(index_of)))
     for edge in tqdm(edges):
-        idx1 = int(edge[0])
-        idx2 = int(edge[1])
-        p1 = np.array(node_mappings[idx1])
-        p2 = np.array(node_mappings[idx2])
+        raw1 = int(edge[0])
+        raw2 = int(edge[1])
+        p1 = np.array(node_mappings[raw1])
+        p2 = np.array(node_mappings[raw2])
         w = slope_weighted_length(p1, p2) if scale else np.linalg.norm(p1 - p2, ord=2)
-        G.add_edge(idx1, idx2, weight=w)
+        G.add_edge(index_of[raw1], index_of[raw2], weight=w)
     print("Number of nodes:", G.number_of_nodes())
     print("Number of edges:", G.number_of_edges())
     return G

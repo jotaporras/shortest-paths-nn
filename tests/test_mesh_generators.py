@@ -69,8 +69,9 @@ def test_mesh_graph_weights(mesh_csvs, scale):
     edges = process_edges(mesh_csvs[1])
     G = construct_mesh_graph(edges, node_idx_dict, scale=scale)
     assert G.number_of_edges() == len(edges)
+    coords = list(node_idx_dict.values())
     for u, v, w in G.edges(data="weight"):
-        p1, p2 = np.array(node_idx_dict[u]), np.array(node_idx_dict[v])
+        p1, p2 = np.array(coords[u]), np.array(coords[v])
         dist = np.linalg.norm(p1 - p2)
         if scale:
             # Same formula as make_dataset --edge-weight.
@@ -79,8 +80,8 @@ def test_mesh_graph_weights(mesh_csvs, scale):
 
 
 def test_process_triangulations_dataset_golden(tmp_path, update_golden):
-    """Pins the pairs for a mesh whose vertex ids are 0..N-1."""
-    mesh_csvs = write_mesh_csvs(tmp_path, contiguous=True)
+    """Pins the pairs for a mesh with shuffled, gapped vertex ids."""
+    mesh_csvs = write_mesh_csvs(tmp_path)
     node_idx_dict, node_features = process_node_features(mesh_csvs[0])
     edges = process_edges(mesh_csvs[1])
     G = construct_mesh_graph(edges, node_idx_dict)
@@ -100,16 +101,24 @@ def test_process_triangulations_dataset_golden(tmp_path, update_golden):
                  float_keys=("lengths_sum", "distances_sum"))
 
 
-def test_process_triangulations_noncontiguous_ids_crash(mesh_csvs, tmp_path):
-    """Bug for pass 2: sources are drawn as 0..N-1 indices, but graph nodes are raw ids.
-
-    Also, edge_index keeps raw ids while node_features is in file order.
-    """
-    node_idx_dict, node_features = process_node_features(mesh_csvs[0])
-    G = construct_mesh_graph(process_edges(mesh_csvs[1]), node_idx_dict)
+@pytest.mark.parametrize("contiguous", [False, True])
+def test_mesh_nodes_match_node_features(tmp_path, contiguous):
+    """Node i of the graph is row i of the node file, whatever the raw vertex ids are."""
+    ids, coords, edges = tiny_mesh(contiguous=contiguous)
+    node_csv, edge_csv = write_mesh_csvs(tmp_path, contiguous=contiguous)
+    node_idx_dict, node_features = process_node_features(node_csv)
+    G = construct_mesh_graph(process_edges(edge_csv), node_idx_dict)
+    assert sorted(G.nodes) == list(range(len(ids)))
+    row_of = {raw: i for i, raw in enumerate(ids)}
+    for a, b in edges:
+        u, v = row_of[a], row_of[b]
+        assert G.has_edge(u, v)
+        assert G[u][v]["weight"] == pytest.approx(np.linalg.norm(coords[u] - coords[v]) / 1000)
     np.random.seed(0)
-    with pytest.raises(nx.NodeNotFound):
-        construct_dataset(G, node_features, str(tmp_path / "x.npz"), "single-source-random", 4, 6)
+    construct_dataset(G, node_features, str(tmp_path / "x.npz"), "single-source-random", 4, 6)
+    data = np.load(tmp_path / "x.npz")
+    for src, tar, length in zip(data["srcs"], data["tars"], data["lengths"]):
+        assert length == pytest.approx(nx.dijkstra_path_length(G, int(src), int(tar)))
 
 
 def test_simplified_mesh_dataset_golden(tmp_path, update_golden):
