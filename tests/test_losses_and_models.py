@@ -58,12 +58,14 @@ def test_activation_names_resolve(activation):
     assert type(model.activation).__name__ == normalize_activation(activation)
 
 
-def test_tagconv_uses_pyg_default_k():
-    # Characterizes the current behavior: K is never passed (spnn/models/gnn.py, create_graph_layer),
-    # so every TAGConv has PyG's default K=3. Pass 2 makes K configurable.
-    model = configure_embedding_module(GNN_CONFIG, "TAGConv")
-    assert model.initial.K == 3
-    assert all(layer.K == 3 for layer in model.module_list)
+@pytest.mark.parametrize("k", [None, 2, 5])
+def test_tagconv_k_from_config(k):
+    # constr.K sets the TAGConv hops of every layer; without it, PyG's default K=3.
+    constr = {**GNN_CONFIG["constr"], **({} if k is None else {"K": k})}
+    model = configure_embedding_module({**GNN_CONFIG, "constr": constr}, "TAGConv")
+    expected = 3 if k is None else k
+    assert model.initial.K == expected
+    assert all(layer.K == expected for layer in model.module_list)
 
 
 def test_unknown_layer_type_fails():

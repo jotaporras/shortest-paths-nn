@@ -10,7 +10,7 @@ LAYERS_WITH_EDGE_DIM = {'GATConv', 'GATv2Conv', 'TransformerConv', 'GeneralConv'
                         'GeneralConvMaxAttention', 'GeneralConvMinAttention', 
                         'GeneralConvMultiAttention'}
 
-def create_graph_layer(layer_type, in_channels, out_channels, edge_dim=None):
+def create_graph_layer(layer_type, in_channels, out_channels, edge_dim=None, K=None):
     """
     Factory function to create graph convolutional layers with appropriate parameters.
     
@@ -22,12 +22,15 @@ def create_graph_layer(layer_type, in_channels, out_channels, edge_dim=None):
         in_channels: Number of input features
         out_channels: Number of output features
         edge_dim: Edge feature dimension (only passed to layers that support it)
+        K: Number of hops for TAGConv (None: the PyG default, 3)
     
     Returns:
         Instantiated graph layer
     """
     layer_class = LAYERS[layer_type]
     
+    if layer_type == 'TAGConv' and K is not None:
+        return layer_class(in_channels, out_channels, K=K)
     if layer_type in LAYERS_WITH_EDGE_DIM and edge_dim is not None:
         return layer_class(in_channels, out_channels, edge_dim=edge_dim)
     else:
@@ -145,15 +148,15 @@ New and improved version of graph neural network with a linear output layer.
 class GNNModel(nn.Module):
     def __init__(self, input=3, output=20, hidden=20, layers=2, 
                  layer_type='GATConv', activation='LeakyReLU',
-                 edge_dim=None, layer_norm=False, **kwargs):
+                 edge_dim=None, layer_norm=False, K=None, **kwargs):
         super(GNNModel, self).__init__()
 
         # Initialize the first layer using factory function
-        self.initial = create_graph_layer(layer_type, input, hidden, edge_dim=edge_dim)
+        self.initial = create_graph_layer(layer_type, input, hidden, edge_dim=edge_dim, K=K)
         
         # Initialize the subsequent layers
         self.module_list = nn.ModuleList([
-            create_graph_layer(layer_type, hidden, hidden, edge_dim=edge_dim) 
+            create_graph_layer(layer_type, hidden, hidden, edge_dim=edge_dim, K=K)
             for _ in range(layers - 1)
         ])
         

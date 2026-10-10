@@ -38,6 +38,7 @@
    "gnn": {
     "activation": "lrelu",
     "constr": {
+     "K": 3,
      "hidden": 64,
      "input": 3,
      "layers": 3,

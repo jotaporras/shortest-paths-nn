@@ -77,6 +77,8 @@ def build_model_config(cfg, model):
         "dropout": True,
         "activation": "lrelu",
     }
+    if not is_sgt:
+        gnn["constr"]["K"] = cfg.get("K", 3)  # TAGConv hops
     if is_sgt:
         gnn["sparse_gt"] = {
             "hidden_dim": cfg["hidden_dim"],

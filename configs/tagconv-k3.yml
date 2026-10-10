@@ -9,6 +9,7 @@ tagconv-k3:
       hidden: 64      # width for hidden layers
       output: 64      # embedding dimension written out
       layers: 3
+      K: 3            # TAGConv hops
     layer_norm: false
     dropout: true
     activation: lrelu

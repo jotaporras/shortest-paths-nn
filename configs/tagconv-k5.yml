@@ -1,7 +1,7 @@
-# TAGConv configuration for terrain graph experiments (3 layers)
-# Usage: --config configs/tagconv-k3.yml --layer-type TAGConv
+# TAGConv configuration for terrain graph experiments (3 layers, K=5)
+# Usage: --config configs/tagconv-k5.yml --layer-type TAGConv
 
-tagconv-k3:
+tagconv-k5:
   # GNN/embedding module; for TAGConv layer_type this builds the siamese encoder.
   gnn:
     constr:
@@ -9,6 +9,7 @@ tagconv-k3:
       hidden: 64      # width for hidden layers
       output: 64      # embedding dimension written out
       layers: 3
+      K: 5            # TAGConv hops
     layer_norm: false
     dropout: true
     activation: lrelu
