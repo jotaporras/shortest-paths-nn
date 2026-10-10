@@ -14,9 +14,17 @@ def get_neighbors(center, n=1):
             ret.append((center[0] + dx, center[1] + dy))
     return ret
 
+def get_ring(center, r):
+    """Grid points at L1 (hop) distance exactly r from center."""
+    if r == 0:
+        return [tuple(center)]
+    return [p for p in get_neighbors(center, n=r)
+            if abs(p[0] - center[0]) + abs(p[1] - center[1]) == r]
+
 # n = rows
 # m = columns
-def generate_src_tar_pairs(node_features, n, m, size=100, sampling_technique='random'):
+def generate_src_tar_pairs(node_features, n, m, size=100, sampling_technique='random',
+                           radii=(60, 100, 120, 140, 160, 200), num_per_radius=20):
     num_nodes = len(node_features)
     node_idxs = np.reshape(np.arange(n * m), (n, m))
     tars = []
@@ -24,24 +32,21 @@ def generate_src_tar_pairs(node_features, n, m, size=100, sampling_technique='ra
         srcs = np.random.choice(np.arange(num_nodes), size = size)
         tars = np.random.choice(np.arange(num_nodes), size = size)
     elif sampling_technique == 'expanding-radius':
-        radii = [60, 100, 120, 140, 160, 200]
-        num_per_radius = 20
-        num_srcs = size // (len(radii) * num_per_radius)
-        srcs = np.random.choice(np.arange(num_nodes), size = num_srcs)
-        for s in srcs:
-            x_loc = s//n
-            y_loc = s % m
-            for r in radii: 
-                # collect all nodes at radii 5
-                nodes_at_radii = get_neighbors((x_loc, y_loc), n=r)
-                for i in range(num_per_radius):
-                    node = nodes_at_radii[np.random.choice(len(nodes_at_radii), replace = False)]
-                    if node[0] >= n or node[0] < 0:
-                        continue
-                    if node[1] >= m or node[1] < 0:
-                        continue
-                    tar = node_idxs[node[0], node[1]]
-                    tars.append(tar)
+        # For each source, up to num_per_radius distinct targets on the ring at
+        # each hop distance in radii. Rings that miss the grid give no targets.
+        num_srcs = max(1, size // (len(radii) * num_per_radius))
+        src_nodes = np.random.choice(np.arange(num_nodes), size = num_srcs)
+        srcs = []
+        for s in src_nodes:
+            row, col = divmod(int(s), m)
+            for r in radii:
+                ring = [p for p in get_ring((row, col), r) if 0 <= p[0] < n and 0 <= p[1] < m]
+                if not ring:
+                    continue
+                picks = np.random.choice(len(ring), size=min(num_per_radius, len(ring)), replace=False)
+                for k in picks:
+                    tars.append(node_idxs[ring[k]])
+                    srcs.append(s)
     # sample sources from top 100 height points. 
     elif sampling_technique == 'height-sensitive-random':
         node_features = np.array(node_features)

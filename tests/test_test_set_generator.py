@@ -88,13 +88,24 @@ def test_generate_src_tar_pairs_golden(grid, technique, update_golden):
     check_golden(f"testgen_pairs_{technique}", observed, update_golden)
 
 
-def test_generate_src_tar_pairs_expanding_radius(grid):
-    """Radii start at 60 hops, so on a small grid no target fits and srcs/tars differ in length."""
-    _, node_features = construct_nx_graph_4n(*grid)
+@pytest.mark.parametrize("rows,cols", [(SIZE, SIZE), (SIZE, SIZE + 3)])
+def test_generate_src_tar_pairs_expanding_radius(rows, cols):
+    """Each target lies on one of the rings around its source, inside the grid."""
+    node_features = np.zeros((rows * cols, 3))
+    radii = (1, 2, 3)
     np.random.seed(0)
-    with pytest.raises(IndexError):
-        test_pairs.generate_src_tar_pairs(node_features, SIZE, SIZE, size=240,
-                                   sampling_technique="expanding-radius")
+    srcs, tars = test_pairs.generate_src_tar_pairs(node_features, rows, cols, size=24,
+                                                   sampling_technique="expanding-radius",
+                                                   radii=radii, num_per_radius=4)
+    assert len(srcs) == len(tars) > 0
+    for s, t in zip(srcs, tars):
+        (sr, sc), (tr, tc) = divmod(int(s), cols), divmod(int(t), cols)
+        assert abs(sr - tr) + abs(sc - tc) in radii
+
+
+def test_get_ring():
+    assert sorted(test_pairs.get_ring((0, 0), 1)) == [(-1, 0), (0, -1), (0, 1), (1, 0)]
+    assert len(test_pairs.get_ring((5, 5), 3)) == 12
 
 
 def test_get_neighbors_is_l1_ball():
