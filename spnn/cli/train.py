@@ -38,7 +38,8 @@ def main():
     parser.add_argument('--config', type=str, default='configs/config-base.yml')
     parser.add_argument('--device', type=str)
     parser.add_argument('--siamese', type=int, default=0)
-    parser.add_argument('--vn', type=int, default=0)
+    parser.add_argument('--vn', type=int, default=0, choices=[0],
+                        help='Virtual nodes are not implemented; only 0 is accepted')
     parser.add_argument('--batch-size', type=int, default=32)
     parser.add_argument('--aggr', type=str, default='max')
     parser.add_argument('--loss', type=str, default='mse_loss')
@@ -48,7 +49,8 @@ def main():
     parser.add_argument('--seed', type=int, default=None,
                         help='Random seed (default: --trial if it is an integer, else 0)')
     parser.add_argument('--p', type=int, default=1 )
-    parser.add_argument('--finetune', type=int, default=0)
+    parser.add_argument('--finetune', type=int, default=0, choices=[0],
+                        help='Has no effect; use --finetune-from. Only 0 is accepted')
     parser.add_argument('--include-edge-attr', type=int, default=0)
     parser.add_argument('--new', action='store_true')
     parser.add_argument('--finetune-from', type=str, default='none')
@@ -71,7 +73,6 @@ def main():
     siamese = True if args.siamese == 1 else False
     vn = True if args.vn == 1 else False 
     aggr = args.aggr
-    finetune=True if args.finetune == 1 else False
     finetune_from=None if args.finetune_from == 'none' else args.finetune_from
     trial = args.trial
     if args.seed is not None:
@@ -173,7 +174,6 @@ def main():
                 "vn": vn,
                 "include_edge_attr": args.include_edge_attr,
                 "trial": trial,
-                "finetune": finetune,
                 "artificial": args.artificial,
                 "model_config_name": modelname,
             }

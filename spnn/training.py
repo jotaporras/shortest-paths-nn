@@ -52,7 +52,6 @@ def train_few_cross_terrain_case(train_dictionary,
                                 model_config, 
                                 layer_type, 
                                 device,
-                                activation='silu',
                                 epochs=100, 
                                 loss_func='mse_loss',
                                 lr =0.001,
@@ -91,7 +90,8 @@ def train_few_cross_terrain_case(train_dictionary,
     mlp=None
 
     if siamese:
-        parameters = embedding_module.parameters() #Thisis the one were using
+        # The pair head is the fixed p-norm, so model_config['mlp'] and aggr are not used.
+        parameters = embedding_module.parameters()
     else:
         mlp = configure_mlp_module(model_config['mlp'], aggr=aggr, new=new)
         mlp = mlp.to(torch.float)

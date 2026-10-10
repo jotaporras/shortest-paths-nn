@@ -71,6 +71,23 @@ def test_unknown_layer_type_fails():
         configure_embedding_module(GNN_CONFIG, "NotALayer")
 
 
+def test_unknown_config_keys_fail():
+    # A misspelled key must fail, not silently fall back to a default.
+    constr = {**GNN_CONFIG["constr"], "k": 5}
+    with pytest.raises(TypeError):
+        configure_embedding_module({**GNN_CONFIG, "constr": constr}, "TAGConv")
+    with pytest.raises(ValueError, match="num_head"):
+        configure_embedding_module({**GNN_CONFIG, "sparse_gt": {"num_head": 2}}, "SparseGT")
+
+
+@pytest.mark.parametrize("flag", ["--vn", "--finetune"])
+def test_train_cli_rejects_flags_with_no_effect(flag, monkeypatch):
+    from spnn.cli import train
+    monkeypatch.setattr("sys.argv", ["train", flag, "1"])
+    with pytest.raises(SystemExit):
+        train.main()
+
+
 @requires_sparse_cpu
 @pytest.mark.parametrize("mode", ["random", "data"])
 def test_sparse_gt_forward(mode):

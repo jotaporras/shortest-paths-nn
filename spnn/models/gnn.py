@@ -71,7 +71,7 @@ New and improved version of graph neural network with a linear output layer.
 class GNNModel(nn.Module):
     def __init__(self, input=3, output=20, hidden=20, layers=2, 
                  layer_type='GATConv', activation='LeakyReLU',
-                 edge_dim=None, layer_norm=False, K=None, **kwargs):
+                 edge_dim=None, layer_norm=False, K=None):
         super(GNNModel, self).__init__()
 
         # Initialize the first layer using factory function

@@ -1,9 +1,15 @@
 """Build the embedding module and the MLP pair head from a model config."""
 import copy
+import logging
 
 from .gnn import GNNModel
 from .mlp import MLPBaseline1, NewMLP, initialize_mlp
 from .sparse_gt import SparseGTWithRPEARL
+
+logger = logging.getLogger(__name__)
+
+SPARSE_GT_KEYS = {'hidden_dim', 'num_layers', 'num_heads', 'num_hops', 'rpearl_samples',
+                  'rpearl_num_layers', 'dropout', 'attn_dropout', 'embedding_mode', 'pe_k'}
 
 ACTIVATION_ALIASES = {
     'relu': 'ReLU',
@@ -37,6 +43,11 @@ def configure_embedding_module(model_config,
     elif layer_type == 'SparseGT':
         # SparseGT with RPEARL positional encodings
         sparse_gt_config = model_config.get('sparse_gt', {})
+        unknown = set(sparse_gt_config) - SPARSE_GT_KEYS
+        if unknown:
+            raise ValueError(f"Unknown sparse_gt config keys: {sorted(unknown)}")
+        logger.warning("SparseGT ignores gnn.dropout, gnn.layer_norm, gnn.activation and "
+                       "gnn.constr.layers; it reads them from gnn.sparse_gt.")
         embedding_module = SparseGTWithRPEARL(
             input_dim=embedding_config.get('input', 3),
             hidden_dim=sparse_gt_config.get('hidden_dim', embedding_config.get('hidden', 64)),
@@ -52,6 +63,8 @@ def configure_embedding_module(model_config,
             pe_k=sparse_gt_config.get('pe_k', 3),
         )
     else:
+        if dropout:
+            logger.warning("GNNModel has no dropout; gnn.dropout: true has no effect.")
         embedding_module = GNNModel(layer_type=layer_type, 
                                     edge_dim=edge_dim, 
                                     activation=activation_for_gnn, 
