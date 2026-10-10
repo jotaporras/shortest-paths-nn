@@ -52,6 +52,8 @@ def main():
     parser.add_argument('--finetune-from', type=str, default='none')
     parser.add_argument('--artificial', action='store_true')
     parser.add_argument('--single-graph-full-batch', action='store_true')
+    parser.add_argument('--val-fraction', type=float, default=0.005,
+                        help='Fraction of training pairs held out for checkpoint selection')
     parser.add_argument('--wandb-tag', type=str, nargs='+', default=None)
     parser.add_argument('--resolution', type=int, default=None,
                         help='Graph resolution to log directly to wandb/config')
@@ -103,9 +105,11 @@ def main():
             train_dataset, train_node_features, train_edge_index = npz_to_dataset(train_data)
             test_dataset_full, test_node_features, test_edge_index = npz_to_dataset(test_data)
 
-            # Split test dataset into validation (0.5%) and test (99.5%)
-            val_dataset, test_dataset = split_dataset_for_validation(test_dataset_full, val_fraction=0.005, seed=42)
-            print(f"Split test data: {len(val_dataset)} validation samples, {len(test_dataset)} test samples")
+            # Hold out training pairs for checkpoint selection; the test pairs stay unseen.
+            val_dataset, train_dataset = split_dataset_for_validation(
+                train_dataset, val_fraction=args.val_fraction, seed=42)
+            test_dataset = test_dataset_full
+            print(f"Split train data: {len(val_dataset)} validation samples, {len(train_dataset)} train samples")
 
             train_edge_attr = None 
             test_edge_attr = None
@@ -133,7 +137,7 @@ def main():
             graph_data = Data(x=train_node_features, edge_index=train_edge_index, edge_attr=edge_attr)        
             test_graph_data = Data(x=test_node_features, edge_index=test_edge_index, edge_attr=test_edge_attr_tensor)
             train_dictionary = {'graphs': [graph_data], 'dataloaders': [train_dataloader]}
-            val_dictionary = {'graphs': [test_graph_data], 'dataloaders': [val_dataloader]}
+            val_dictionary = {'graphs': [graph_data], 'dataloaders': [val_dataloader]}
             test_dictionary = {'graphs': [test_graph_data], 'dataloaders': [test_dataloader]}
 
             log_dir = format_log_dir(output_dir(), 

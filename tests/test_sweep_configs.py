@@ -75,7 +75,7 @@ def test_sweep_train_arguments_golden(name, terrain_pair, monkeypatch, update_go
     train_graph = kwargs.pop("train_dictionary")["graphs"][0]
     val = kwargs.pop("val_dictionary")
     test = kwargs.pop("test_dictionary")
-    assert val["graphs"][0] is test["graphs"][0]
+    assert val["graphs"][0] is train_graph  # validation pairs come from the training graph
     assert train_graph.edge_attr.dtype.is_floating_point
     observed = {
         "constants": {

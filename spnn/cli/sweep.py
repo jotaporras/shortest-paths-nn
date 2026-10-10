@@ -123,9 +123,11 @@ def train(preset_name):
 
     train_dataset, train_node_features, train_edge_index = npz_to_dataset(train_data)
     test_dataset_full, test_node_features, test_edge_index = npz_to_dataset(test_data)
-    val_dataset, test_dataset = split_dataset_for_validation(
-        test_dataset_full, val_fraction=0.005, seed=42
+    # Hold out training pairs for checkpoint selection; the test pairs stay unseen.
+    val_dataset, train_dataset = split_dataset_for_validation(
+        train_dataset, val_fraction=0.005, seed=42
     )
+    test_dataset = test_dataset_full
 
     batch_size = 32
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -145,7 +147,7 @@ def train(preset_name):
     )
 
     train_dictionary = {"graphs": [graph_data], "dataloaders": [train_dataloader]}
-    val_dictionary = {"graphs": [test_graph_data], "dataloaders": [val_dataloader]}
+    val_dictionary = {"graphs": [graph_data], "dataloaders": [val_dataloader]}
     test_dictionary = {"graphs": [test_graph_data], "dataloaders": [test_dataloader]}
 
     log_dir = format_log_dir(

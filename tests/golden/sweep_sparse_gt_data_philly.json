@@ -25,7 +25,7 @@
   "<root>/data/philly_res10_hybrid.npz",
   "<root>/data/generated2/philly_test_res04.npz"
  ],
- "test_size": 478,
+ "test_size": 480,
  "train_kwargs": {
   "aggr": "sum+diff",
   "base_log_dir": "<log_dir>",
@@ -87,5 +87,5 @@
    "sweep_sgt_data_philly"
   ]
  },
- "val_size": 2
+ "val_size": 1
 }

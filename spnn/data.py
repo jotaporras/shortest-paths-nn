@@ -47,7 +47,7 @@ def npz_to_dataset(data):
     return train_dataset, node_features, edge_index
 
 def split_dataset_for_validation(dataset, val_fraction=0.005, seed=42):
-    """Split dataset into validation and test portions.
+    """Split a random validation subset off a dataset.
     
     Args:
         dataset: A SingleGraphShortestPathDataset instance
@@ -56,15 +56,15 @@ def split_dataset_for_validation(dataset, val_fraction=0.005, seed=42):
         
     Returns:
         val_dataset: Subset for validation
-        test_dataset: Subset for test
+        rest_dataset: Subset with the remaining pairs
     """
     n = len(dataset)
     n_val = max(1, int(n * val_fraction))
     generator = torch.Generator().manual_seed(seed)
     indices = torch.randperm(n, generator=generator).tolist()
     val_indices = indices[:n_val]
-    test_indices = indices[n_val:]
+    rest_indices = indices[n_val:]
     
     val_dataset = Subset(dataset, val_indices)
-    test_dataset = Subset(dataset, test_indices)
-    return val_dataset, test_dataset
+    rest_dataset = Subset(dataset, rest_indices)
+    return val_dataset, rest_dataset
