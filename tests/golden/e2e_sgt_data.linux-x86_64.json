@@ -1,16 +1,16 @@
 {
  "final_train_acc_1pct": 0.005025125628140704,
  "final_train_acc_2pct": 0.010050251256281407,
- "final_train_acc_5pct": 0.03015075376884422,
- "final_train_loss": 0.004566356474206076,
- "final_train_mae": 0.05667266395673081,
- "final_train_mse": 0.004566356474206076,
- "final_train_nmae": 0.41514117274452095,
- "test_acc_1pct": 0.0,
- "test_acc_2pct": 0.0020833333333333333,
- "test_acc_5pct": 0.010416666666666666,
- "test_loss": 0.0032931667442123095,
- "test_mae": 0.045486605664094286,
- "test_mse": 0.0032931667442123095,
- "test_nmae": 0.475241223971049
+ "final_train_acc_5pct": 0.020100502512562814,
+ "final_train_loss": 0.005376924524299014,
+ "final_train_mae": 0.06173408074519742,
+ "final_train_mse": 0.005376924524299014,
+ "final_train_nmae": 0.44606897938790635,
+ "test_acc_1pct": 0.00625,
+ "test_acc_2pct": 0.008333333333333333,
+ "test_acc_5pct": 0.0125,
+ "test_loss": 0.0039369416888803245,
+ "test_mae": 0.04993366499741872,
+ "test_mse": 0.0039369416888803245,
+ "test_nmae": 0.5106479247411092
 }

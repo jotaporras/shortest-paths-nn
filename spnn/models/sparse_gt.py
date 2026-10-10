@@ -18,6 +18,7 @@ from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import Data
 from torch_geometric.nn import TAGConv
 from torch_geometric import utils
+from torch_sparse import SparseTensor, matmul as sparse_matmul
 
 # Filter sparse CSR warnings
 warnings.filterwarnings("ignore", ".*Sparse CSR tensor support is in beta state.*")
@@ -193,7 +194,16 @@ class DataGNNPositionalEncodings(nn.Module):
 # Sparse Attention Components
 # =============================================================================
 
-class SparseCSRDropout(nn.Module):
+class SparseValuesDropout(nn.Module):
+    """Dropout over the flat values of a sparse attention score matrix.
+
+    Operates on the values tensor directly (plus a row index) instead of
+    taking and rebuilding a CSR tensor: in torch 2.4 the backward of the
+    torch.sparse_csr_tensor factory / CSR .values() round trip materializes
+    the full dense matrix, so autograd-tracked values must never cross the
+    flat-values <-> CSR boundary.
+    """
+
     def __init__(self, p: float = 0.5, set_to_neg_inf: bool = False):
         """
         Args:
@@ -206,46 +216,40 @@ class SparseCSRDropout(nn.Module):
         self.p = p
         self.set_to_neg_inf = set_to_neg_inf
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if not x.is_sparse_csr:
-            raise TypeError("Input must be a sparse CSR tensor")
+    def forward(
+        self, values: torch.Tensor, row_index: torch.Tensor, num_rows: int
+    ) -> torch.Tensor:
+        """
+        Args:
+            values: Flat nnz values of the score matrix.
+            row_index: Row id of each value, shape (nnz,).
+            num_rows: Number of rows in the score matrix.
+        """
         if not self.training or self.p == 0.0:
-            return x
+            return values
 
         keep = 1.0 - self.p
-        v = x.values()
         if self.set_to_neg_inf:
-            crow = x.crow_indices()
-            N = x.size(0)
-            row_counts = crow[1:] - crow[:-1]
-            row_index = torch.arange(N, device=v.device).repeat_interleave(row_counts)
-            mask = torch.rand_like(v) < keep
+            mask = torch.rand_like(values) < keep
+            # Force-keep one entry in any row that would lose all of them,
+            # so the row softmax never sees only -inf.
             kept_per_row = utils.scatter(
-                mask.to(v.dtype), index=row_index, dim=0, reduce="sum", dim_size=N
+                mask.to(values.dtype), index=row_index, dim=0,
+                reduce="sum", dim_size=num_rows,
             )
-            need_force = (kept_per_row == 0) & (row_counts > 0)
-            rand_vals = torch.rand_like(v)
+            need_force = kept_per_row == 0
+            rand_vals = torch.rand_like(values)
             max_per_row = utils.scatter(
-                rand_vals, row_index, dim=0, reduce="max", dim_size=N
+                rand_vals, row_index, dim=0, reduce="max", dim_size=num_rows
             )
             is_force = need_force[row_index] & (rand_vals == max_per_row[row_index])
             mask = mask | is_force
-            new_values = v.masked_fill(~mask, float("-inf"))
-        else:
-            if keep == 0.0:
-                new_values = torch.zeros_like(v)
-            else:
-                mask = (torch.rand_like(v) < keep).to(v.dtype)
-                new_values = (v * mask) / keep
+            return values.masked_fill(~mask, float("-inf"))
 
-        return torch.sparse_csr_tensor(
-            crow_indices=x.crow_indices(),
-            col_indices=x.col_indices(),
-            values=new_values,
-            size=x.size(),
-            dtype=x.dtype,
-            device=x.device,
-        )
+        if keep == 0.0:
+            return torch.zeros_like(values)
+        mask = (torch.rand_like(values) < keep).to(values.dtype)
+        return (values * mask) / keep
 
 
 def _mha_sparse_attention(
@@ -258,14 +262,14 @@ def _mha_sparse_attention(
     """Sparse multi-head attention using CSR adjacency with per-head sampled_addmm.
 
     Args:
-        QX: Query tensor of shape (H, N, Fh).
+        QX: Query tensor of shape (H, n, Fh) — n may be a row-chunk of the graph.
         KX: Key tensor of shape (H, N, Fh).
         VX: Value tensor of shape (H, N, Fh).
-        A_csr: Sparse CSR adjacency of shape (N, N).
-        dropout: SparseCSRDropout module to apply to the unnormalized weights.
+        A_csr: Sparse CSR attention pattern of shape (n, N).
+        dropout: SparseValuesDropout module to apply to the unnormalized weights.
 
     Returns:
-        Aggregated tensor of shape (N, H*Fh).
+        Aggregated tensor of shape (n, H*Fh).
     """
     H, N, F_head = QX.shape
     outputs: list[torch.Tensor] = []
@@ -276,27 +280,34 @@ def _mha_sparse_attention(
             input=A_csr, mat1=QX[i], mat2=KX_T_i, beta=0.0
         )
 
-        if dropout is not None:
-            unnormalized = dropout(unnormalized)
-
         crow = unnormalized.crow_indices()
         col = unnormalized.col_indices()
         row_counts = crow[1:] - crow[:-1]
         row_index = torch.arange(N, device=QX.device).repeat_interleave(row_counts)
 
-        scores = unnormalized.values() / (F_head**0.5)
+        # All differentiable steps from here on stay on the flat values
+        # tensor: rebuilding an autograd-tracked CSR (torch.sparse_csr_tensor)
+        # and reading .values() back densifies the full (n x N) matrix in
+        # backward, exactly like torch.sparse.mm's value gradient below.
+        scores = unnormalized.values()
+        if dropout is not None:
+            scores = dropout(scores, row_index, N)
+        scores = scores / (F_head**0.5)
         probs = utils.softmax(src=scores, index=row_index, dim=0, num_nodes=N)
 
-        B_h = torch.sparse_csr_tensor(
-            crow_indices=crow, col_indices=col, values=probs, size=(N, N)
+        # PV product via torch_sparse, NOT torch.sparse.mm: in torch 2.4 the
+        # backward of torch.sparse.mm w.r.t. the CSR values materializes the
+        # full (n x N) matrix densely (202 GiB at N=233k). torch_sparse computes
+        # the value gradient by gathering (O(nnz * Fh)).
+        B_h = SparseTensor(
+            rowptr=crow, col=col, value=probs, sparse_sizes=tuple(A_csr.shape),
+            is_sorted=True, trust_data=True,
         )
-
-        out_h = torch.sparse.mm(B_h, VX[i])
+        out_h = sparse_matmul(B_h, VX[i])
         outputs.append(out_h)
 
     weighted_values = torch.stack(outputs, dim=0)
     attn_out = weighted_values.permute(1, 0, 2).reshape(N, H * F_head)
-    torch.utils.checkpoint.checkpoint(lambda: attn_out)
 
     return attn_out
 
@@ -324,7 +335,7 @@ class SparseKHopGraphAttention(nn.Module):
         self.V = nn.Linear(d_model, d_model)
 
         # Attention dropout on sparse logits (separate from layer dropout)
-        self.attn_dropout = SparseCSRDropout(p=attn_dropout, set_to_neg_inf=True)
+        self.attn_dropout = SparseValuesDropout(p=attn_dropout, set_to_neg_inf=True)
 
         d_ff = d_model * 3
         self.out_proj_1 = nn.Linear(d_model, d_ff)

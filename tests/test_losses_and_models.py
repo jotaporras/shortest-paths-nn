@@ -87,6 +87,28 @@ def test_sparse_gt_forward(mode):
     assert torch.isfinite(out).all()
 
 
+@requires_sparse_cpu
+@pytest.mark.parametrize("mode", ["random", "data"])
+def test_sparse_gt_every_parameter_gets_a_gradient(mode):
+    # Regression: a reentrant checkpoint(lambda: attn_out) call detached the
+    # attention output, so Q, K and V never trained.
+    config = {**GNN_CONFIG, "sparse_gt": {
+        "hidden_dim": 8, "num_layers": 2, "num_heads": 2, "num_hops": 2,
+        "rpearl_samples": 3, "rpearl_num_layers": 2, "pe_k": 2,
+        "dropout": 0.1, "attn_dropout": 0.1, "embedding_mode": mode}}
+    torch.manual_seed(0)
+    model = configure_embedding_module(config, "SparseGT")
+    model.train()
+    graph = tiny_graph()
+    out = model(graph.x, graph.edge_index)
+    (out * torch.randn_like(out)).sum().backward()
+    no_grad = [name for name, param in model.named_parameters()
+               if param.requires_grad and param.grad is None]
+    assert no_grad == []
+    attn = [p for n, p in model.named_parameters() if ".Q.weight" in n or ".V.weight" in n]
+    assert attn and all(p.grad.abs().sum() > 0 for p in attn)
+
+
 def test_compute_metrics_with_single_pair():
     # A dataloader with exactly one pair gives a one-row predictions table.
     model = configure_embedding_module(GNN_CONFIG, "TAGConv")
