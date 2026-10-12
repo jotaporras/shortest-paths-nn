@@ -24,9 +24,17 @@ CUDA_VISIBLE_DEVICES=0 python -m spnn.cli.train --train-data <train.npz> --test-
 Use `--layer-type SparseGT --rpearl-embedding-mode {data,random}` with a `configs/sparse-gt-*.yml` config for SparseGT.
 Sweep agents: `python -m spnn.cli.sweep --preset <name>`, called by the `configs/sweep-*.yml` files.
 
+Notes:
+- `--single-graph-full-batch` takes one optimizer step per epoch over all pairs. `--epochs 100` is then 100 steps. Leave it out for minibatch training (one step per `--batch-size` pairs).
+- Train and test sets must use the same edge weights. `--edge-weight` on one side only makes the model learn a different distance from the one it is tested on.
+- `configs/gat-chen-stage1.yml` with `--layer-type GATConv --p 1 --lr 0.001` is the stage-1 setup of Chen et al. (ICML 2025). See `docs/2026-10-results-analysis.md` for its results and the no-training baselines.
+
 ### Dataset Generation
-- `python -m spnn.cli.make_dataset`: training pairs on a DEM grid graph (`--sampling-technique`, `--triangles`, `--edge-weight`).
-- `python -m spnn.cli.make_test_dataset`: test pairs.
+- `python -m spnn.cli.make_dataset`: training pairs on a DEM grid graph (`--sampling-technique`, `--triangles`, `--edge-weight`). The grid always has 8 neighbours.
+- `python -m spnn.cli.make_test_dataset`: test pairs. Pass `--triangles`, or the grid has only 4 neighbours and the paths do not match a training set from `make_dataset`.
+
+### Documentation
+`docs/` holds dated notes: `2026-10-asilomar-refactor.md` (the refactor and the 23 bug fixes) and `2026-10-results-analysis.md` (why the e20–e30 results were weak, baselines, comparison with Chen et al.).
 - `python -m spnn.cli.make_mesh_dataset`, `python -m spnn.cli.make_simplified_mesh_dataset`: mesh and simplified-mesh datasets.
 
 ## Coding Style & Naming Conventions

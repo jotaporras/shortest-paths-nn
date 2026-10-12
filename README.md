@@ -37,6 +37,8 @@ python -m spnn.cli.make_dataset --name norway --raw-data data/norway-smallest.tx
     --sampling-technique distance-based --triangles --filename data/res20.npz
 python -m spnn.cli.make_test_dataset --name norway --raw-data data/norway-smallest.txt \
     --graph-resolution 20 --dataset-size 10000 --triangles --filename data/res20_test.npz
+# Keep --triangles on make_test_dataset: without it the test grid has 4 neighbours, while
+# make_dataset always builds 8. Use --edge-weight on both commands or on neither.
 
 # Single-stage siamese training
 python -m spnn.cli.train --train-data data/res20.npz --test-data data/res20_test.npz \

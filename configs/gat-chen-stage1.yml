@@ -1,0 +1,24 @@
+# GAT embedding that follows stage 1 of Chen, Agarwal and Wang (ICML 2025,
+# "De-coupled NeuroGF"): 3 GAT layers, 128 hidden, 64-dim output, edge
+# weights as the edge feature. Pair it with --layer-type GATConv --p 1
+# --lr 0.001 --include-edge-attr 1 --epochs 500. Siamese runs ignore mlp.
+
+gat-chen-stage1:
+  gnn:
+    constr:
+      input: 3
+      hidden: 128
+      output: 64
+      layers: 3
+    layer_norm: false
+    dropout: false
+    activation: lrelu
+
+  mlp:
+    constr:
+      input: 128
+      hidden: 128
+      output: 1
+      layers: 3
+    layer_norm: false
+    dropout: false
