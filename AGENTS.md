@@ -3,7 +3,7 @@
 ## Project Structure & Module Organization
 The single-stage siamese pipeline lives in the `spnn/` package. Use relative imports inside it and explicit imports everywhere (no wildcard imports).
 - `spnn/models/`: `gnn.py` (TAGConv `GNNModel`, `LAYERS` and `ACTIVATIONS` registries), `sparse_gt.py` (`SparseGTWithRPEARL`), `mlp.py`, `factory.py` (builds the embedding module and MLP head from a config).
-- `spnn/graphs/`: DEM grid graphs (`grid.py`), mesh graphs (`mesh.py`), quadtree simplification (`quadtree.py`).
+- `spnn/graphs/`: DEM grid graphs (`grid.py`), mesh graphs (`mesh.py`), quadtree simplification (`quadtree.py`), irregular node samples of a DEM (`point_sampling.py`) and kNN/Delaunay/radius graphs on point sets (`point_graph.py`).
 - `spnn/sampling/`: training-pair samplers (`train_pairs.py`, `targets.py`, `critical_points.py`) and test-pair sampling (`test_pairs.py`).
 - `spnn/training.py`, `losses.py` (`LOSSES` registry), `metrics.py`, `data.py`.
 - `spnn/cli/`: entry points, run as `python -m spnn.cli.<name>`.

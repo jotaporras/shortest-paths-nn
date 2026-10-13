@@ -75,6 +75,8 @@ def quadtree_simplification(tree, num_rows, num_cols):
             graph.add_edge(v1, v2)        
     
     ## prune extraneous edges:
+    # Pruning removes edges only, so the node set is fixed; a set makes each check O(span).
+    node_set = set(graph.nodes)
     for edge in tqdm(list(graph.edges)):
         idx1 = min(edge)
         idx2 = max(edge)
@@ -87,12 +89,12 @@ def quadtree_simplification(tree, num_rows, num_cols):
 
         if v1_x == v2_x: 
             nodes_between = real_node_idxs[v1_x, v1_y+1:v2_y]
-            remove_edge = not set(nodes_between).isdisjoint(graph.nodes)
+            remove_edge = not set(nodes_between).isdisjoint(node_set)
             if remove_edge:
                 graph.remove_edge(edge[0], edge[1])
         elif v1_y == v2_y:
             nodes_between = real_node_idxs[v1_x+1:v2_x, v1_y]
-            remove_edge = not set(nodes_between).isdisjoint(graph.nodes)
+            remove_edge = not set(nodes_between).isdisjoint(node_set)
             if remove_edge:
                 graph.remove_edge(edge[0], edge[1])
         
