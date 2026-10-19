@@ -1,0 +1,25 @@
+# e33: TAGConv GNN with edge lengths. Copy of e31-tagconv.yml plus edge_weight_kernel: exp,
+# which gives TAGConv the edge weight w = exp(-length / sigma), sigma learnable in km.
+# Run with --layer-type TAGConv --p 1 --include-edge-attr 1 (siamese L1); mlp is unused.
+
+e33-tagconv-ew:
+  gnn:
+    constr:
+      input: 3
+      hidden: 128
+      output: 128
+      layers: 3
+      K: 3
+      edge_weight_kernel: exp
+    layer_norm: false
+    dropout: false
+    activation: lrelu
+
+  mlp:
+    constr:
+      input: 128
+      hidden: 128
+      output: 1
+      layers: 3
+    layer_norm: false
+    dropout: false

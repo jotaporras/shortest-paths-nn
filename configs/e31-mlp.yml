@@ -1,0 +1,22 @@
+# e31: MLP on node xyz only (no graph), 3 layers, 128-dim embedding.
+# The no-message-passing baseline. Run with --layer-type MLP --p 1 (siamese L1); mlp is unused.
+
+e31-mlp:
+  gnn:
+    constr:
+      input: 3
+      hidden: 128
+      output: 128
+      layers: 3
+    layer_norm: false
+    dropout: false
+    activation: lrelu
+
+  mlp:
+    constr:
+      input: 128
+      hidden: 128
+      output: 1
+      layers: 3
+    layer_norm: false
+    dropout: false

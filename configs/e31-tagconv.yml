@@ -1,0 +1,23 @@
+# e31: TAGConv GNN, K = 3 hops per layer, 3 layers, 128-dim embedding (same width as SparseGT).
+# Run with --layer-type TAGConv --p 1 (siamese L1); mlp is unused.
+
+e31-tagconv:
+  gnn:
+    constr:
+      input: 3
+      hidden: 128
+      output: 128
+      layers: 3
+      K: 3
+    layer_norm: false
+    dropout: false
+    activation: lrelu
+
+  mlp:
+    constr:
+      input: 128
+      hidden: 128
+      output: 1
+      layers: 3
+    layer_norm: false
+    dropout: false
