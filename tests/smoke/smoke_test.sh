@@ -8,7 +8,7 @@
 #
 # Usage: bash tests/smoke/smoke_test.sh <fixture_dir> <out_dir> [device]
 #   env: PYTHON (default: python), EPOCHS (default: 5),
-#        WANDB_PROJECT (default: manifold-transformers-dev), WANDB_MODE (default: online)
+#        WANDB_PROJECT (default: terrains), WANDB_MODE (default: online)
 # Runs are tagged "smoke" and "smoke-<out_dir name>" in wandb.
 set -euo pipefail
 
@@ -22,7 +22,7 @@ EPOCHS=${EPOCHS:-5}
 cd "$(dirname "$0")/../.."
 export WANDB_MODE=${WANDB_MODE:-online}
 export WANDB_ENTITY=${WANDB_ENTITY:-alelab}
-export WANDB_PROJECT=${WANDB_PROJECT:-manifold-transformers-dev}
+export WANDB_PROJECT=${WANDB_PROJECT:-terrains}
 LABEL=$(basename "$OUT")
 # Record which code ran: git state, or the .sync_commit file written when the
 # tree was copied to this machine without its .git directory.

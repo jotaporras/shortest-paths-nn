@@ -1,6 +1,7 @@
 """Single-stage training loop: embed nodes, predict ||h_s - h_t||_p, log to wandb."""
 import copy
 import logging
+import math
 import os
 from pathlib import Path
 
@@ -8,6 +9,7 @@ import numpy as np
 import torch
 import wandb
 from torch.optim import AdamW
+from torch.optim.lr_scheduler import LambdaLR
 from tqdm import tqdm, trange
 
 from .data import materialize_single_graph_batch
@@ -47,6 +49,50 @@ def format_log_dir(output_dir,
     return log_dir
 
 
+LR_SCHEDULES = ('constant', 'cosine')
+
+
+# Scalar physical parameters that weight decay must not pull toward 0 (e33 review):
+# the edge-kernel scale `rho` of GNNModel and the attention-bias slopes of SparseGT.
+# With wd 0.1 at lr 3.5e-3 over 5,650 steps, decay alone multiplies them by 0.14.
+NO_WEIGHT_DECAY_SUFFIXES = ('edge_kernel.rho', 'bias_slope')
+
+
+def param_groups(named_parameters, weight_decay):
+    """Split parameters into a decayed group and a no-decay group for AdamW."""
+    decay, no_decay = [], []
+    for name, p in named_parameters:
+        (no_decay if name.endswith(NO_WEIGHT_DECAY_SUFFIXES) else decay).append(p)
+    groups = [{'params': decay, 'weight_decay': weight_decay}]
+    if no_decay:
+        groups.append({'params': no_decay, 'weight_decay': 0.0})
+    return groups
+
+
+def lr_factor_fn(warmup_steps, total_steps, schedule='constant', min_ratio=1e-4):
+    """Multiplier of the peak learning rate at optimizer step s (0-based), for LambdaLR.
+
+    Linear warmup from 0 over warmup_steps, then constant or a cosine decay that
+    reaches min_ratio x peak at the last step. Returns None for constant without
+    warmup, so the caller creates no scheduler.
+    """
+    if schedule not in LR_SCHEDULES:
+        raise ValueError(f"Unknown lr_schedule '{schedule}'. Use one of {LR_SCHEDULES}.")
+    if schedule == 'constant' and warmup_steps <= 0:
+        return None
+    decay_steps = max(1, total_steps - warmup_steps - 1)
+
+    def factor(step):
+        if step < warmup_steps:
+            return (step + 1) / warmup_steps
+        if schedule == 'constant':
+            return 1.0
+        progress = min(1.0, (step - warmup_steps) / decay_steps)
+        return min_ratio + (1.0 - min_ratio) * 0.5 * (1.0 + math.cos(math.pi * progress))
+
+    return factor
+
+
 # train_dictionary = {'graphs': [g1, g2, g3, ....], 'dataloaders': [dl1, dl2, ....]}
 def train_few_cross_terrain_case(train_dictionary,
                                 model_config, 
@@ -68,7 +114,20 @@ def train_few_cross_terrain_case(train_dictionary,
                                 test_dictionary=None,
                                 val_dictionary=None,
                                 early_stopping_patience=None,
-                                seed=0):
+                                seed=0,
+                                weight_decay=0.01,
+                                warmup_steps=0,
+                                lr_schedule='constant',
+                                on_epoch_end=None,
+                                finish_wandb=True):
+    """Train one model and log to wandb.
+
+    weight_decay: AdamW weight decay (0.01 is the AdamW default used before).
+    warmup_steps, lr_schedule: see lr_factor_fn; the defaults keep a constant rate.
+    on_epoch_end(epoch, val_metrics) -> bool: called after each validation; True
+        stops training (used by spnn.cli.tune for pruning).
+    finish_wandb: False leaves the wandb run open for the caller to log more and finish.
+    """
     if base_log_dir is None:
         base_log_dir = str(output_dir())
     # Seeds model init, dataloader shuffling and RPEARL random features.
@@ -91,20 +150,23 @@ def train_few_cross_terrain_case(train_dictionary,
 
     if siamese:
         # The pair head is the fixed p-norm, so model_config['mlp'] and aggr are not used.
-        parameters = embedding_module.parameters()
+        named_parameters = list(embedding_module.named_parameters())
     else:
         mlp = configure_mlp_module(model_config['mlp'], aggr=aggr, new=new)
         mlp = mlp.to(torch.float)
         mlp.to(device)
-        parameters = list(embedding_module.parameters()) + list(mlp.parameters())
+        named_parameters = list(embedding_module.named_parameters()) + list(mlp.named_parameters())
         print(mlp)
-    
-    optimizer = AdamW(parameters, lr=lr)
+
+    optimizer = AdamW(param_groups(named_parameters, weight_decay), lr=lr, weight_decay=weight_decay)
 
     # Build wandb config with all relevant parameters
     base_config = {
         "seed": seed,
         "learning_rate": lr,
+        "weight_decay": weight_decay,
+        "warmup_steps": warmup_steps,
+        "lr_schedule": lr_schedule,
         "epochs": epochs,
         "siamese": siamese,
         "p": p,
@@ -179,6 +241,13 @@ def train_few_cross_terrain_case(train_dictionary,
         print(msg)
         logger.info(msg)
 
+    if use_single_graph_full_batch:
+        total_steps = epochs
+    else:
+        total_steps = epochs * sum(len(dl) for dl in train_dictionary['dataloaders'])
+    factor = lr_factor_fn(warmup_steps, total_steps, lr_schedule)
+    scheduler = LambdaLR(optimizer, factor) if factor is not None else None
+
     full_batch_graph = None
     full_batch_srcs = None
     full_batch_tars = None
@@ -215,6 +284,10 @@ def train_few_cross_terrain_case(train_dictionary,
             loss = LOSSES[loss_func](pred, full_batch_lengths)
             loss.backward()
             optimizer.step()
+            step_log = {}
+            if scheduler is not None:
+                step_log['lr'] = scheduler.get_last_lr()[0]
+                scheduler.step()
 
             with torch.no_grad():
                 train_mse = mse_loss(pred, full_batch_lengths).item()
@@ -228,6 +301,7 @@ def train_few_cross_terrain_case(train_dictionary,
                 'train_nmae': train_nmae,
                 'epoch': epoch,
                 'global_step': global_step,
+                **step_log,
             }, step=global_step)
 
             global_step += 1
@@ -258,13 +332,17 @@ def train_few_cross_terrain_case(train_dictionary,
                     loss.backward()
                     optimizer.step()
                     optimizer.zero_grad()
-                    
+                    step_log = {}
+                    if scheduler is not None:
+                        step_log['lr'] = scheduler.get_last_lr()[0]
+                        scheduler.step()
+
                     # Log metrics every batch
                     with torch.no_grad():
                         train_mse = mse_loss(pred, lengths).item()
                         train_mae = mae_loss(pred, lengths).item()
                         train_nmae = nmae_loss(pred, lengths).item()
-                    
+
                     wandb.log({
                         'train_loss': loss.item(),
                         'train_mse': train_mse,
@@ -272,6 +350,7 @@ def train_few_cross_terrain_case(train_dictionary,
                         'train_nmae': train_nmae,
                         'epoch': epoch,
                         'global_step': global_step,
+                        **step_log,
                     }, step=global_step)
                     
                     global_step += 1
@@ -306,6 +385,10 @@ def train_few_cross_terrain_case(train_dictionary,
 
             if early_stopping_patience is not None and epochs_without_improvement >= early_stopping_patience:
                 print(f"Early stopping at epoch {epoch} (no improvement for {early_stopping_patience} epochs)")
+                break
+            if on_epoch_end is not None and on_epoch_end(epoch, val_metrics):
+                print(f"Stopped by on_epoch_end at epoch {epoch}")
+                wandb.run.summary['stopped_by_callback_epoch'] = epoch
                 break
 
     # Restore best model for final evaluation
@@ -374,12 +457,14 @@ def train_few_cross_terrain_case(train_dictionary,
         path = os.path.join(log_dir, 'final_model.pt')
         print("saving model to:", path)
         torch.save(embedding_module.state_dict(), path)
-        wandb.finish()
+        if finish_wandb:
+            wandb.finish()
         return embedding_module
     else:
         path = os.path.join(log_dir, 'final_model.pt')
         print("saving model to:", path)
         torch.save({'gnn_state_dict':embedding_module.state_dict(), 
                     'mlp_state_dict': mlp.state_dict()}, path)
-        wandb.finish()
+        if finish_wandb:
+            wandb.finish()
         return embedding_module, mlp

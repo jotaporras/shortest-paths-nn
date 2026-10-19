@@ -72,3 +72,30 @@ def build_quadtree_graph(xv, yv, elev, thresh, p=2):
     edges = [(pos[int(a)], pos[int(b)]) for a, b in Q.edges]
     G, feats = _weighted_graph(feats, edges, p=p)
     return G, feats, dem_idx
+
+
+def connect_components(G, node_features, max_frac=0.01, p=2):
+    """Join every small component to the largest one by its shortest xy bridge.
+
+    Each non-largest component gets one edge: the closest (in xy) pair between it
+    and the largest component, weighted like every other edge. Raises if the
+    small components hold more than ``max_frac`` of the nodes, because then the
+    graph construction itself is wrong, not just unlucky. Returns the number of
+    bridges added (0 for a connected graph). G is changed in place.
+    """
+    comps = sorted(nx.connected_components(G), key=len, reverse=True)
+    if len(comps) == 1:
+        return 0
+    n_small = sum(len(c) for c in comps[1:])
+    if n_small > max_frac * G.number_of_nodes():
+        raise ValueError(f"{len(comps) - 1} small components hold {n_small} of "
+                         f"{G.number_of_nodes()} nodes (> {max_frac:.0%})")
+    feats = np.asarray(node_features, dtype=float)
+    main = np.fromiter(comps[0], dtype=np.int64)
+    tree = cKDTree(feats[main, :2])
+    for comp in comps[1:]:
+        comp = np.fromiter(comp, dtype=np.int64)
+        d, j = tree.query(feats[comp, :2])
+        a, b = int(comp[np.argmin(d)]), int(main[j[np.argmin(d)]])
+        G.add_edge(a, b, weight=float(np.linalg.norm(feats[a] - feats[b], ord=p)))
+    return len(comps) - 1

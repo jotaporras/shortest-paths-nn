@@ -263,6 +263,7 @@ def _mha_sparse_attention(
     VX: torch.Tensor,
     A_csr: torch.Tensor,
     dropout=None,
+    bias: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Sparse multi-head attention using CSR adjacency with per-head sampled_addmm.
 
@@ -272,6 +273,8 @@ def _mha_sparse_attention(
         VX: Value tensor of shape (H, N, Fh).
         A_csr: Sparse CSR attention pattern of shape (n, N).
         dropout: SparseValuesDropout module to apply to the unnormalized weights.
+        bias: Optional additive logit bias of shape (H, nnz), in the CSR value order
+            of A_csr, added after the 1/sqrt(Fh) scaling and before the softmax.
 
     Returns:
         Aggregated tensor of shape (n, H*Fh).
@@ -298,6 +301,8 @@ def _mha_sparse_attention(
         if dropout is not None:
             scores = dropout(scores, row_index, N)
         scores = scores / (F_head**0.5)
+        if bias is not None:
+            scores = scores + bias[i]
         probs = utils.softmax(src=scores, index=row_index, dim=0, num_nodes=N)
 
         # PV product via torch_sparse, NOT torch.sparse.mm: in torch 2.4 the
@@ -317,6 +322,18 @@ def _mha_sparse_attention(
     return attn_out
 
 
+ATTN_BIASES = ("none", "euclidean")
+
+
+def _csr_pair_distances(A_csr: torch.Tensor, pos: torch.Tensor) -> torch.Tensor:
+    """Euclidean distance ||pos_i - pos_j|| for every stored (i, j) of A_csr, in its value order."""
+    crow = A_csr.crow_indices()
+    col = A_csr.col_indices()
+    row_counts = crow[1:] - crow[:-1]
+    row = torch.arange(A_csr.shape[0], device=pos.device).repeat_interleave(row_counts)
+    return torch.linalg.vector_norm(pos[row] - pos[col], dim=1)
+
+
 class SparseKHopGraphAttention(nn.Module):
     """Sparse CSR-based k-hop graph attention with multi-head projections."""
 
@@ -327,6 +344,7 @@ class SparseKHopGraphAttention(nn.Module):
         num_hops: int,
         dropout: float = 0.5,
         attn_dropout: float = 0.0,
+        attn_bias: str = "none",
     ):
         super().__init__()
         self.d_model = d_model
@@ -334,6 +352,16 @@ class SparseKHopGraphAttention(nn.Module):
         self.num_hops = num_hops
 
         assert self.d_model % self.num_heads == 0
+
+        # Euclidean attention bias (e33): logit_ij += slope_h * ||pos_i - pos_j||, with pos
+        # in km, over every pair in the k-hop window. On a 1-hop edge the distance is the
+        # edge length, so with num_hops=1 this is the GAT-style edge-length term. Slopes are
+        # learnable and start at ALiBi-style geometric values in 1/km: -10, -5, ..., -10/2^(H-1).
+        if attn_bias not in ATTN_BIASES:
+            raise ValueError(f"Unknown attn_bias '{attn_bias}'. Use one of {sorted(ATTN_BIASES)}.")
+        self.attn_bias = attn_bias
+        if attn_bias == "euclidean":
+            self.bias_slope = nn.Parameter(-10.0 * 2.0 ** -torch.arange(num_heads, dtype=torch.float))
 
         self.Q = nn.Linear(d_model, d_model)
         self.K = nn.Linear(d_model, d_model)
@@ -351,13 +379,14 @@ class SparseKHopGraphAttention(nn.Module):
         self.dropout = nn.Dropout(p=dropout)
 
     def forward(
-        self, data: Data, attn_window: torch.Tensor | None = None
+        self, data: Data, attn_window: torch.Tensor | None = None, pos: torch.Tensor | None = None
     ) -> torch.Tensor:
         """Computes attention using CSR adjacency derived from the window.
 
         Args:
             data: Graph data to attend over.
             attn_window: Edge indices of shape (2, E).
+            pos: Node coordinates (N, 3) in km, needed when attn_bias is "euclidean".
 
         Returns:
             Projected representation of shape (N, d_model).
@@ -388,7 +417,13 @@ class SparseKHopGraphAttention(nn.Module):
         ).coalesce()
         A_csr = A.to_sparse_csr()
 
-        attn_out = _mha_sparse_attention(QH, KH, VH, A_csr, dropout=self.attn_dropout)
+        bias = None
+        if self.attn_bias == "euclidean":
+            if pos is None:
+                raise ValueError("attn_bias 'euclidean' needs the node coordinates (pos)")
+            bias = self.bias_slope[:, None] * _csr_pair_distances(A_csr, pos)[None, :]
+
+        attn_out = _mha_sparse_attention(QH, KH, VH, A_csr, dropout=self.attn_dropout, bias=bias)
 
         attn_out = self.ln1(attn_out)
         attn_out = self.dropout(attn_out)
@@ -418,6 +453,7 @@ class KHopGTModel(nn.Module):
         num_layers: int,
         dropout: float = 0.5,
         attn_dropout: float = 0.0,
+        attn_bias: str = "none",
     ):
         super().__init__()
         self.num_hops = num_hops
@@ -434,6 +470,7 @@ class KHopGTModel(nn.Module):
                     num_hops,
                     dropout=dropout,
                     attn_dropout=attn_dropout,
+                    attn_bias=attn_bias,
                 )
                 for _ in range(num_layers)
             ]
@@ -476,15 +513,16 @@ class KHopGTModel(nn.Module):
 
     def forward(self, data: Data):
         attn_window = self._get_attn_window(data, self.num_hops)
+        pos = getattr(data, "pos", None)
 
         data_l = data
         for attn_layer in self.attention_layers[:-1]:
-            attn_out = attn_layer(data_l, attn_window=attn_window)
+            attn_out = attn_layer(data_l, attn_window=attn_window, pos=pos)
             X = data_l.x + attn_out
             X = self.nonlinearity(X)
             data_l = Data(x=X, edge_index=data_l.edge_index)
 
-        attn_out = self.attention_layers[-1](data_l, attn_window=attn_window)
+        attn_out = self.attention_layers[-1](data_l, attn_window=attn_window, pos=pos)
         X = data_l.x + attn_out
 
         return X
@@ -531,9 +569,11 @@ class SparseGTWithRPEARL(nn.Module):
         attn_dropout: float = 0.1,
         embedding_mode: str = "random",
         pe_k: int = 3,
+        attn_bias: str = "none",
     ):
         super().__init__()
-        
+
+        self.attn_bias = attn_bias
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
@@ -580,8 +620,9 @@ class SparseGTWithRPEARL(nn.Module):
             num_layers=num_layers,
             dropout=dropout,
             attn_dropout=attn_dropout,
+            attn_bias=attn_bias,
         )
-        
+
         # Output projection
         self.output_projection = nn.Linear(hidden_dim, output_dim)
         
@@ -617,7 +658,8 @@ class SparseGTWithRPEARL(nn.Module):
         x_with_pe = x_proj + pe
         
         # Create data with PE-augmented features
-        data_with_pe = Data(x=x_with_pe, edge_index=edge_index)
+        # pos = the raw xyz in km, used by the euclidean attention bias
+        data_with_pe = Data(x=x_with_pe, edge_index=edge_index, pos=x)
         
         # Run through Sparse GT backbone
         embeddings = self.backbone(data_with_pe)
@@ -645,5 +687,6 @@ class SparseGTWithRPEARL(nn.Module):
             "sparse_gt_attn_dropout": self.attn_dropout_p,
             "sparse_gt_embedding_mode": self.embedding_mode,
             "sparse_gt_pe_k": self.pe_k,
+            "sparse_gt_attn_bias": self.attn_bias,
         }
 

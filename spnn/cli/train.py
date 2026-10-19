@@ -12,8 +12,8 @@ import yaml
 from torch.utils.data import DataLoader
 from torch_geometric.data import Data
 
-from ..data import npz_to_dataset, split_dataset_for_validation
-from ..training import format_log_dir, output_dir, train_few_cross_terrain_case
+from ..data import PairBatchLoader, npz_to_dataset, split_dataset_for_validation
+from ..training import LR_SCHEDULES, format_log_dir, output_dir, train_few_cross_terrain_case
 
 
 def get_artificial_datasets(res=2):
@@ -58,6 +58,17 @@ def main():
     parser.add_argument('--single-graph-full-batch', action='store_true')
     parser.add_argument('--val-fraction', type=float, default=0.005,
                         help='Fraction of training pairs held out for checkpoint selection')
+    parser.add_argument('--val-pairs', type=int, default=None,
+                        help='Number of training pairs held out for validation; overrides --val-fraction')
+    parser.add_argument('--weight-decay', type=float, default=0.01,
+                        help='AdamW weight decay (0.01 is the AdamW default)')
+    parser.add_argument('--warmup-steps', type=int, default=0,
+                        help='Linear learning-rate warmup from 0 over this many optimizer steps')
+    parser.add_argument('--lr-schedule', type=str, default='constant', choices=list(LR_SCHEDULES),
+                        help='After warmup: constant, or cosine decay to 1e-4 x lr at the last step')
+    parser.add_argument('--fast-loader', action='store_true',
+                        help='Slice batches from tensors on the device instead of a DataLoader. '
+                             'Same batches, about 2.5x faster steps for SparseGT at batch 16,384')
     parser.add_argument('--wandb-tag', type=str, nargs='+', default=None)
     parser.add_argument('--resolution', type=int, default=None,
                         help='Graph resolution to log directly to wandb/config')
@@ -114,7 +125,7 @@ def main():
 
             # Hold out training pairs for checkpoint selection; the test pairs stay unseen.
             val_dataset, train_dataset = split_dataset_for_validation(
-                train_dataset, val_fraction=args.val_fraction, seed=42)
+                train_dataset, val_fraction=args.val_fraction, seed=42, n_val=args.val_pairs)
             test_dataset = test_dataset_full
             print(f"Split train data: {len(val_dataset)} validation samples, {len(train_dataset)} train samples")
 
@@ -125,9 +136,14 @@ def main():
                 test_edge_attr = test_data['distances']
             print("Number of train nodes:", len(train_node_features))
             print("Number of test nodes:", len(test_node_features))
-            train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-            val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False)
-            test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
+            if args.fast_loader:
+                train_dataloader = PairBatchLoader(train_dataset, args.batch_size, shuffle=True, device=args.device)
+                val_dataloader = PairBatchLoader(val_dataset, args.batch_size, device=args.device)
+                test_dataloader = PairBatchLoader(test_dataset, args.batch_size, device=args.device)
+            else:
+                train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+                val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False)
+                test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
 
             if train_edge_attr is not None:
                 edge_attr = torch.tensor(train_edge_attr, dtype=torch.float)
@@ -207,7 +223,10 @@ def main():
                                         single_graph_full_batch=args.single_graph_full_batch,
                                         test_dictionary=test_dictionary,
                                         val_dictionary=val_dictionary,
-                                        early_stopping_patience=args.early_stopping_patience)
+                                        early_stopping_patience=args.early_stopping_patience,
+                                        weight_decay=args.weight_decay,
+                                        warmup_steps=args.warmup_steps,
+                                        lr_schedule=args.lr_schedule)
         
 if __name__=='__main__':
     main()

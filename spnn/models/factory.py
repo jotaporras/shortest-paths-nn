@@ -9,7 +9,8 @@ from .sparse_gt import SparseGTWithRPEARL
 logger = logging.getLogger(__name__)
 
 SPARSE_GT_KEYS = {'hidden_dim', 'num_layers', 'num_heads', 'num_hops', 'rpearl_samples',
-                  'rpearl_num_layers', 'dropout', 'attn_dropout', 'embedding_mode', 'pe_k'}
+                  'rpearl_num_layers', 'dropout', 'attn_dropout', 'embedding_mode', 'pe_k',
+                  'attn_bias'}
 
 ACTIVATION_ALIASES = {
     'relu': 'ReLU',
@@ -61,6 +62,7 @@ def configure_embedding_module(model_config,
             attn_dropout=sparse_gt_config.get('attn_dropout', 0.1),
             embedding_mode=sparse_gt_config.get('embedding_mode', 'random'),
             pe_k=sparse_gt_config.get('pe_k', 3),
+            attn_bias=sparse_gt_config.get('attn_bias', 'none'),
         )
     else:
         if dropout:
