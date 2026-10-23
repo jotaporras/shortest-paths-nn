@@ -13,12 +13,13 @@
 # A run is skipped when its JSON exists. To retry a failed run, delete $OUT/locks/<run>.
 # A run whose training set does not exist yet is skipped without a lock; the worker
 # makes another pass every $WAIT seconds until every set exists.
-# Env overrides: EPOCHS (all models), LR, STRIDES, SCHEMES, MODELS, OUT, TAG, WAIT.
+# Env overrides: EPOCHS (all models), LR, STRIDES, SCHEMES, MODELS, OUT, TAG, WAIT, LAPPE_K (sgt2lap), SPNN_LAPPE_CACHE.
 set -uo pipefail
 GPU=${1:?usage: e34_transfer_suite.sh <gpu>}
 REPO=/home/jporras/sourcecode/shortest-paths-nn
 PY=/home/jporras/miniconda3/envs/spnn-asilomar/bin/python
-DATA=/home/jporras/data/spnn/e31
+DATA=${DATA:-/home/jporras/data/spnn/e31}  # training sets; DSET labels them in wandb
+DSET=${DSET:-e31}
 TEST=/home/jporras/data/spnn/full_test-004.npz
 OUT=${OUT:-/home/jporras/runs/e34}
 TAG=${TAG:-e34}
@@ -38,6 +39,8 @@ model_args() {
     mlp)     echo "--layer-type MLP --config configs/e31-mlp.yml" ;;
     tagconv) echo "--layer-type TAGConv --config configs/e31-tagconv.yml" ;;
     sgt2)    echo "--layer-type SparseGT --rpearl-embedding-mode data --config configs/e32-sparse-gt-k2.yml" ;;
+    # e35: same SparseGT with Laplacian eigenvector encodings; LAPPE_K from the e35 stride-12 tuning.
+    sgt2lap) echo "--layer-type SparseGT --rpearl-embedding-mode lappe --lappe-k ${LAPPE_K:-64} --config configs/e35-sparse-gt-k2-lappe.yml" ;;
     *) echo "unknown model $1" >&2; return 1 ;;
   esac
 }
@@ -53,7 +56,7 @@ model_lr() {
 
 model_epochs() {
   case $1 in
-    sgt2) echo 200 ;;
+    sgt2|sgt2lap) echo 200 ;;
     *)    echo 100 ;;
   esac
 }
@@ -79,7 +82,7 @@ while :; do
           --epochs "${EPOCHS:-$(model_epochs "$model")}" --batch-size 8192 --lr "${LR:-$(model_lr "$model")}" \
           --siamese 1 --p 1 --aggr sum+diff --loss mse_loss --include-edge-attr 1 --new --trial 1 --device cuda \
           --val-pairs 25000 --weight-decay 0.1 --warmup-steps 300 --lr-schedule constant --fast-loader \
-          --resolution "$stride" --dataset-name "norway/e31/$data" \
+          --resolution "$stride" --dataset-name "norway/$DSET/$data" \
           --run-name "$TAG-$run" --wandb-tag "$TAG" "$TAG-$scheme" "$TAG-s$stride" "$TAG-$model" \
           > "$OUT/$run.log" 2>&1
         status=$?

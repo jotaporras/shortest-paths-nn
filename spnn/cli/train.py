@@ -4,6 +4,7 @@ Usage: python -m spnn.cli.train --dataset-name ... --train-data ... --test-data 
 """
 import argparse
 import os
+import time
 from pathlib import Path
 
 import numpy as np
@@ -13,6 +14,7 @@ from torch.utils.data import DataLoader
 from torch_geometric.data import Data
 
 from ..data import PairBatchLoader, npz_to_dataset, split_dataset_for_validation
+from ..graphs.spectral import laplacian_pe
 from ..training import LR_SCHEDULES, format_log_dir, output_dir, train_few_cross_terrain_case
 
 
@@ -77,8 +79,13 @@ def main():
     parser.add_argument('--run-name', type=str, default=None,
                         help='Custom wandb run name. Defaults to terrain-graph-{layer_type}-{resolution}-stage1')
     parser.add_argument('--rpearl-embedding-mode', type=str, default=None,
-                        choices=['random', 'data'],
-                        help='Positional encoding mode for SparseGT (overrides config)')
+                        choices=['random', 'data', 'lappe'],
+                        help='Positional encoding mode for SparseGT (overrides config). lappe = precomputed '
+                             'Laplacian eigenvectors appended to the node features (e35)')
+    parser.add_argument('--lappe-k', type=int, default=None,
+                        help='Number of Laplacian eigenvectors in lappe mode (overrides sparse_gt.lappe_k)')
+    parser.add_argument('--lappe-cache-dir', type=str, default=None,
+                        help='Eigenvector cache; default $SPNN_LAPPE_CACHE or ~/data/spnn/lappe')
 
     args = parser.parse_args()
     siamese = True if args.siamese == 1 else False
@@ -177,6 +184,27 @@ def main():
 
             if args.rpearl_embedding_mode is not None:
                 config.setdefault('gnn', {}).setdefault('sparse_gt', {})['embedding_mode'] = args.rpearl_embedding_mode
+            sgt_config = config.get('gnn', {}).get('sparse_gt', {})
+            if args.lappe_k is not None:
+                sgt_config['lappe_k'] = args.lappe_k
+            lappe_info = {}
+            if args.layer_type == 'SparseGT' and sgt_config.get('embedding_mode') == 'lappe':
+                # Append the eigenvectors to the node features; the model splits them off again.
+                lappe_k = sgt_config.setdefault('lappe_k', 16)
+                for label, graph, src in (('train', graph_data, train_data_pth), ('test', test_graph_data, test_file)):
+                    t0 = time.time()
+                    V, info = laplacian_pe(graph.num_nodes, graph.edge_index.numpy(), lappe_k,
+                                           cache_dir=args.lappe_cache_dir, source=src)
+                    graph.x = torch.cat([graph.x, torch.from_numpy(V)], dim=1)
+                    lappe_info[f'lappe_{label}_eig_seconds'] = info['seconds']
+                    lappe_info[f'lappe_{label}_eig_peak_rss_gb'] = info['peak_rss_gb']
+                    lappe_info[f'lappe_{label}_eig_k_computed'] = info['k']
+                    lappe_info[f'lappe_{label}_eig_host'] = info['host']
+                    lappe_info[f'lappe_{label}_eigenvalues'] = info['eigenvalues'][:lappe_k + 1]
+                    lappe_info[f'lappe_{label}_load_seconds'] = round(time.time() - t0, 2)
+                    print(f"lappe {label}: {lappe_k} eigenvectors from {info['cache']} "
+                          f"(computed in {info['seconds']} s on {info['host']}, loaded in {time.time() - t0:.1f} s)")
+                lappe_info['lappe_k'] = lappe_k
 
             print(modelname, config)
 
@@ -195,6 +223,7 @@ def main():
             }
             if args.rpearl_embedding_mode is not None:
                 wandb_config["rpearl_embedding_mode"] = args.rpearl_embedding_mode
+            wandb_config.update(lappe_info)
             if args.resolution is not None:
                 wandb_config["resolution"] = args.resolution
             

@@ -195,6 +195,27 @@ class DataGNNPositionalEncodings(nn.Module):
         return pe
 
 
+class LaplacianPositionalEncodings(nn.Module):
+    """Linear projection of precomputed Laplacian eigenvectors (e35).
+
+    The eigenvectors arrive as extra node-feature columns (see spnn.graphs.spectral). In
+    training mode every column gets a random sign per forward, the usual sign-flip
+    augmentation, since eigenvector signs are arbitrary.
+    """
+
+    def __init__(self, k, d_model, sign_flip=True):
+        super().__init__()
+        self.k = k
+        self.sign_flip = sign_flip
+        self.projection = nn.Linear(k, d_model)
+
+    def forward(self, pe):
+        if self.training and self.sign_flip:
+            signs = torch.randint(0, 2, (1, self.k), device=pe.device, dtype=pe.dtype) * 2 - 1
+            pe = pe * signs
+        return self.projection(pe)
+
+
 # =============================================================================
 # Sparse Attention Components
 # =============================================================================
@@ -551,8 +572,11 @@ class SparseGTWithRPEARL(nn.Module):
         dropout (float): Dropout probability
         attn_dropout (float): Attention dropout probability
         embedding_mode (str): "random" for RPEARL random encodings,
-                              "data" for data-driven GCN encodings
+                              "data" for data-driven GCN encodings,
+                              "lappe" for precomputed Laplacian eigenvectors, passed as the
+                              lappe_k columns of x after the input_dim features
         pe_k (int): TAGConv polynomial order K for the PE GCN
+        lappe_k (int): number of eigenvector columns in lappe mode
     """
 
     def __init__(
@@ -570,10 +594,12 @@ class SparseGTWithRPEARL(nn.Module):
         embedding_mode: str = "random",
         pe_k: int = 3,
         attn_bias: str = "none",
+        lappe_k: int = 16,
     ):
         super().__init__()
 
         self.attn_bias = attn_bias
+        self.lappe_k = lappe_k
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
@@ -609,8 +635,10 @@ class SparseGTWithRPEARL(nn.Module):
                 dropout=dropout,
                 k=pe_k,
             )
+        elif embedding_mode == "lappe":
+            self.positional_encoding = LaplacianPositionalEncodings(k=lappe_k, d_model=hidden_dim)
         else:
-            raise ValueError(f"Unknown embedding_mode '{embedding_mode}'. Use 'random' or 'data'.")
+            raise ValueError(f"Unknown embedding_mode '{embedding_mode}'. Use 'random', 'data' or 'lappe'.")
         
         # Sparse GT backbone
         self.backbone = KHopGTModel(
@@ -644,15 +672,27 @@ class SparseGTWithRPEARL(nn.Module):
         """
         # Ensure input dtype matches model weights
         x = x.to(dtype=self.input_projection.weight.dtype)
-        
+
+        if self.embedding_mode == "lappe":
+            # x = [features | lappe_k eigenvector columns], see spnn.graphs.spectral
+            expected = self.input_dim + self.lappe_k
+            if x.shape[1] != expected:
+                raise ValueError(f"lappe mode expects {self.input_dim} features + {self.lappe_k} eigenvector "
+                                 f"columns = {expected}, got {x.shape[1]}")
+            x, pe_in = x[:, :self.input_dim], x[:, self.input_dim:]
+            pe = self.positional_encoding(pe_in)
+        else:
+            pe = None
+
         # Create Data object for internal processing
         data = Data(x=x, edge_index=edge_index)
-        
+
         # Project input to hidden dimension
         x_proj = self.input_projection(x)
-        
+
         # Compute RPEARL positional encodings
-        pe = self.positional_encoding(data)
+        if pe is None:
+            pe = self.positional_encoding(data)
         
         # Add positional encodings to projected input
         x_with_pe = x_proj + pe
@@ -688,5 +728,6 @@ class SparseGTWithRPEARL(nn.Module):
             "sparse_gt_embedding_mode": self.embedding_mode,
             "sparse_gt_pe_k": self.pe_k,
             "sparse_gt_attn_bias": self.attn_bias,
+            "sparse_gt_lappe_k": self.lappe_k if self.embedding_mode == "lappe" else None,
         }
 

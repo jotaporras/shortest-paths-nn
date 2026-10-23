@@ -35,6 +35,7 @@ import yaml
 from torch_geometric.data import Data
 
 from ..data import PairBatchLoader, npz_to_dataset, split_dataset_for_validation
+from ..graphs.spectral import laplacian_pe
 from ..metrics import evaluate
 from ..training import train_few_cross_terrain_case
 
@@ -77,16 +78,25 @@ def architecture_space(trial, args):
     return params, recipe, {k: params[k] for k in ARCH_KEYS}
 
 
+def lappe_space(trial, args):
+    """The e35 search: the number of Laplacian eigenvectors. Architecture from --config, recipe from the flags."""
+    params = {'lappe_k': trial.suggest_categorical('lappe_k', LAPPE_KS)}
+    recipe = {k: getattr(args, k) for k in RECIPE_KEYS}
+    return params, recipe, {'embedding_mode': 'lappe', 'lappe_k': params['lappe_k']}
+
+
+LAPPE_KS = [2, 4, 8, 16, 32, 64]
 # name -> fn(trial, args) returning (suggested params, training recipe, sparse_gt config overrides).
-SEARCH_SPACES = {'optimizer': optimizer_space, 'architecture': architecture_space}
+SEARCH_SPACES = {'optimizer': optimizer_space, 'architecture': architecture_space, 'lappe': lappe_space}
+FIXED_RECIPE_SPACES = ('architecture', 'lappe')
 
 
 def check_recipe_flags(args):
-    """The recipe flags must all be set for --space architecture and must be unset otherwise."""
+    """The recipe flags must all be set for the fixed-recipe spaces and must be unset otherwise."""
     given = [k for k in RECIPE_KEYS if getattr(args, k) is not None]
-    if args.space == 'architecture' and len(given) != len(RECIPE_KEYS):
+    if args.space in FIXED_RECIPE_SPACES and len(given) != len(RECIPE_KEYS):
         missing = [f"--{k.replace('_', '-')}" for k in RECIPE_KEYS if k not in given]
-        raise SystemExit(f'--space architecture needs the fixed recipe; missing {missing}')
+        raise SystemExit(f'--space {args.space} needs the fixed recipe; missing {missing}')
     if args.space == 'optimizer' and given:
         raise SystemExit(f'--space optimizer searches the recipe; remove {given}')
 
@@ -97,7 +107,7 @@ def build_config(base_config, recipe, arch):
     sgt = config['gnn']['sparse_gt']
     sgt['dropout'] = recipe['dropout']
     sgt['attn_dropout'] = recipe['attn_dropout']
-    sgt['embedding_mode'] = 'data'
+    sgt.setdefault('embedding_mode', 'data')
     sgt.update(arch)
     if 'hidden_dim' in arch:
         # The node embedding width (gnn.constr.output) follows the attention width.
@@ -124,7 +134,15 @@ def should_stop(epoch, val_nmae, abort_after_epoch, abort_nmae):
     return None
 
 
-def make_objective(args, base_config, train_dataset, val_dataset, train_graph, test_dictionary):
+def with_lappe(graph, V, k):
+    """Copy of the graph with the first k eigenvector columns appended to x (V is (n, k_max) on device)."""
+    out = graph.clone()
+    out.x = torch.cat([graph.x, V[:, :k]], dim=1)
+    return out
+
+
+def make_objective(args, base_config, train_dataset, val_dataset, train_graph, test_dictionary, lappe=None):
+    """lappe: None, or dict(train=V, test=V, info=...) with the k_max eigenvectors of both graphs on device."""
     device = args.device
     out = Path(args.out)
     (out / 'trials').mkdir(parents=True, exist_ok=True)
@@ -133,6 +151,12 @@ def make_objective(args, base_config, train_dataset, val_dataset, train_graph, t
     def objective(trial):
         params, recipe, arch = SEARCH_SPACES[args.space](trial, args)
         config = build_config(base_config, recipe, arch)
+        graph, test_dict = train_graph, test_dictionary
+        if config['gnn']['sparse_gt'].get('embedding_mode') == 'lappe':
+            k = config['gnn']['sparse_gt']['lappe_k']
+            graph = with_lappe(train_graph, lappe['train'], k)
+            test_dict = {'graphs': [with_lappe(test_dictionary['graphs'][0], lappe['test'], k)],
+                         'dataloaders': test_dictionary['dataloaders']}
         train_loader = PairBatchLoader(train_dataset, recipe['batch_size'], shuffle=True, device=device)
         state = {'best': float('inf'), 'best_epoch': None, 'curve': [], 'stop_reason': None}
 
@@ -163,9 +187,10 @@ def make_objective(args, base_config, train_dataset, val_dataset, train_graph, t
             'trial_number': trial.number,
             'gpu_tag': args.gpu_tag,
             'val_pairs': len(val_dataset),
-            'rpearl_embedding_mode': 'data',
+            'rpearl_embedding_mode': config['gnn']['sparse_gt'].get('embedding_mode', 'data'),
             **{f'trial_{k}': v for k, v in params.items()},
             **{f'recipe_{k}': v for k, v in recipe.items()},
+            **(lappe['info'] if lappe is not None else {}),
         }
         print(f"trial {trial.number}: start {params}", flush=True)
         start = time.time()
@@ -176,8 +201,8 @@ def make_objective(args, base_config, train_dataset, val_dataset, train_graph, t
         try:
             try:
                 module = train_few_cross_terrain_case(
-                    train_dictionary={'graphs': [train_graph], 'dataloaders': [train_loader]},
-                    val_dictionary={'graphs': [train_graph], 'dataloaders': [val_loader]},
+                    train_dictionary={'graphs': [graph], 'dataloaders': [train_loader]},
+                    val_dictionary={'graphs': [graph], 'dataloaders': [val_loader]},
                     test_dictionary=None,
                     model_config=config,
                     layer_type=LAYER_TYPE,
@@ -209,7 +234,7 @@ def make_objective(args, base_config, train_dataset, val_dataset, train_graph, t
             test_metrics = None
             if not pruned:
                 t_test = time.time()
-                metrics = evaluate(module, None, test_dictionary, device, LAYER_TYPE, True, P, LOSS,
+                metrics = evaluate(module, None, test_dict, device, LAYER_TYPE, True, P, LOSS,
                                    tqdm_prefix='small test')
                 test_metrics = {k: metrics[k] for k in METRIC_KEYS}
                 test_metrics['num_pairs'] = metrics['num_pairs']
@@ -256,7 +281,13 @@ def main():
     parser.add_argument('--train-data', required=True)
     parser.add_argument('--test-data', required=True, help='Evaluated once per completed trial')
     parser.add_argument('--space', choices=sorted(SEARCH_SPACES), default='optimizer',
-                        help='optimizer: search the recipe; architecture: search sparse_gt keys, fixed recipe')
+                        help='optimizer: search the recipe; architecture: search sparse_gt keys, fixed recipe; '
+                             'lappe: search the number of Laplacian eigenvectors, fixed recipe')
+    parser.add_argument('--sampler', choices=['tpe', 'grid'], default='tpe',
+                        help='grid enumerates every categorical choice once (use with --space lappe)')
+    parser.add_argument('--lappe-cache-dir', default=None, help='Eigenvector cache for --space lappe')
+    parser.add_argument('--lappe-ks', nargs='+', type=int, default=None,
+                        help='Grid of lappe_k values for --space lappe (default 2 4 8 16 32 64)')
     parser.add_argument('--config', required=True,
                         help='SparseGT config; the dropouts and the searched keys are overridden')
     parser.add_argument('--device', default='cuda')
@@ -292,6 +323,8 @@ def main():
     recipe.add_argument('--attn-dropout', type=float, help='sparse_gt.attn_dropout')
     args = parser.parse_args()
     check_recipe_flags(args)
+    if args.lappe_ks:
+        LAPPE_KS[:] = args.lappe_ks
 
     os.environ['WANDB_PROJECT'] = args.wandb_project
     t0 = time.time()
@@ -308,14 +341,36 @@ def main():
     if len(configs) != 1:
         raise ValueError(f'{args.config} must hold one model config, found {list(configs)}')
     base_config = next(iter(configs.values()))
+    lappe = None
+    if args.space == 'lappe':
+        lappe = {'info': {}}
+        k_max = max(LAPPE_KS)
+        for label, graph, src in (('train', train_graph, args.train_data), ('test', test_graph, args.test_data)):
+            V, info = laplacian_pe(graph.num_nodes, graph.edge_index.cpu().numpy(), k_max,
+                                   cache_dir=args.lappe_cache_dir, k_max=k_max, source=src)
+            lappe[label] = torch.from_numpy(V).to(args.device)
+            lappe['info'].update({f'lappe_{label}_eig_seconds': info['seconds'],
+                                  f'lappe_{label}_eig_peak_rss_gb': info['peak_rss_gb'],
+                                  f'lappe_{label}_eig_k_computed': info['k'],
+                                  f'lappe_{label}_eig_host': info['host'],
+                                  f'lappe_{label}_eigenvalues': info['eigenvalues']})
+            print(f"lappe {label}: {k_max} eigenvectors from {info['cache']} (computed in {info['seconds']} s)",
+                  flush=True)
 
     storage = optuna.storages.RDBStorage(
         url=f'sqlite:///{Path(args.storage).expanduser()}',
         engine_kwargs={'connect_args': {'timeout': 300}},
     )
     worker_offset = int(args.gpu_tag) if args.gpu_tag.isdigit() else 0
-    sampler = optuna.samplers.TPESampler(seed=args.sampler_seed + worker_offset,
-                                         n_startup_trials=args.n_startup_trials, constant_liar=True)
+    if args.sampler == 'grid':
+        if args.space != 'lappe':
+            raise SystemExit('--sampler grid is only defined for --space lappe')
+        # One seed for every worker: the grid sampler shuffles its grid order with the seed, and workers
+        # with different seeds disagree on which grid id is which value (duplicated k=4 on 2026-10-20).
+        sampler = optuna.samplers.GridSampler({'lappe_k': LAPPE_KS}, seed=args.sampler_seed)
+    else:
+        sampler = optuna.samplers.TPESampler(seed=args.sampler_seed + worker_offset,
+                                             n_startup_trials=args.n_startup_trials, constant_liar=True)
     pruner_startup = args.n_startup_trials if args.pruner_startup_trials is None else args.pruner_startup_trials
     pruner = optuna.pruners.MedianPruner(n_startup_trials=pruner_startup,
                                          n_warmup_steps=args.pruner_warmup_epochs)
@@ -325,7 +380,7 @@ def main():
     if args.n_trials is not None:
         callbacks.append(optuna.study.MaxTrialsCallback(
             args.n_trials, states=(optuna.trial.TrialState.COMPLETE, optuna.trial.TrialState.PRUNED)))
-    objective = make_objective(args, base_config, train_dataset, val_dataset, train_graph, test_dictionary)
+    objective = make_objective(args, base_config, train_dataset, val_dataset, train_graph, test_dictionary, lappe)
     study.optimize(objective, timeout=args.timeout, callbacks=callbacks, catch=(Exception,), gc_after_trial=True)
     done = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
     if done:
